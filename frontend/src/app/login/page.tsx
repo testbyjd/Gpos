@@ -12,13 +12,23 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const user = getStoredUser();
-    if (user) {
-      router.replace(user.role === "cashier" ? "/" : "/dashboard");
+    const stored = getStoredUser();
+    if (stored) {
+      router.replace(stored.role === "cashier" ? "/" : "/dashboard");
     }
+    setReady(true);
   }, [router]);
+
+  if (!ready) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background text-sm font-semibold text-muted-foreground">
+        Checking session...
+      </div>
+    );
+  }
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();

@@ -1,20 +1,25 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getStoredUser } from "@/lib/auth";
+import { getStoredUser, type AuthUser } from "@/lib/auth";
 import { PosRegister } from "@/features/pos/PosRegister";
 
 export default function Home() {
-  const [user] = useState(getStoredUser);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (!user) {
-      // Nginx redirects /login → /pos/login.
+    setUser(getStoredUser());
+    setReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (ready && !user) {
       window.location.replace("/login");
     }
-  }, [user]);
+  }, [ready, user]);
 
-  if (!user) {
+  if (!ready || !user) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-4 text-center text-sm font-semibold text-muted-foreground">
         Checking session...

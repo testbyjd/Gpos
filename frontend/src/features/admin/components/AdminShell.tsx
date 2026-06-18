@@ -52,8 +52,8 @@ interface AdminShellProps {
 export function AdminShell({ title, eyebrow, actions, allowedRoles = ["owner", "manager"], children }: AdminShellProps) {
   const pathname = usePathname();
   const router = useRouter();
-  // Admin panel is owner/manager by default. Cashiers are sent back to the POS.
-  const [user] = useState(getStoredUser);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [ready, setReady] = useState(false);
   const allowed = user !== null && allowedRoles.includes(user.role);
   const roleLabel = user?.role === "manager" ? "Manager Console" : "Owner Console";
   const initials = (user?.name ?? "GT")
@@ -65,19 +65,25 @@ export function AdminShell({ title, eyebrow, actions, allowedRoles = ["owner", "
     .toUpperCase();
 
   useEffect(() => {
+    setUser(getStoredUser());
+    setReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
     if (!user) {
       router.replace("/login");
     } else if (!allowed) {
       router.replace(user.role === "cashier" ? "/" : "/dashboard");
     }
-  }, [user, allowed, router]);
+  }, [ready, user, allowed, router]);
 
   function signOut() {
     logout();
     router.replace("/login");
   }
 
-  if (!allowed) {
+  if (!ready || !allowed) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-4 text-center text-sm font-semibold text-muted-foreground">
         Checking session...
