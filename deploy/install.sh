@@ -32,14 +32,18 @@ if [[ -z "$DB_PASSWORD" ]]; then
   echo "[install] Generated DB password (saved in backend/.env): $DB_PASSWORD"
 fi
 
-echo "[install] Installing system packages…"
-export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq
-apt-get install -y -qq \
-  nginx postgresql postgresql-contrib \
-  php8.3-fpm php8.3-cli php8.3-pgsql php8.3-mbstring php8.3-xml php8.3-curl php8.3-zip php8.3-bcmath \
-  composer nodejs npm certbot python3-certbot-nginx \
-  git curl unzip
+if [[ "${SKIP_APT:-0}" == "1" ]] || { command -v nginx >/dev/null && command -v php8.3 >/dev/null && command -v composer >/dev/null && command -v psql >/dev/null; }; then
+  echo "[install] System packages already present — skipping apt."
+else
+  echo "[install] Installing system packages…"
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -qq
+  apt-get install -y -qq \
+    nginx postgresql postgresql-contrib \
+    php8.3-fpm php8.3-cli php8.3-pgsql php8.3-mbstring php8.3-xml php8.3-curl php8.3-zip php8.3-bcmath \
+    composer nodejs npm certbot python3-certbot-nginx \
+    git curl unzip
+fi
 
 # Node 20+ for Next.js — use NodeSource if distro node is too old.
 NODE_MAJOR="$(node -v 2>/dev/null | sed 's/v//' | cut -d. -f1 || echo 0)"
@@ -50,8 +54,11 @@ if [[ "${NODE_MAJOR:-0}" -lt 20 ]]; then
 fi
 
 echo "[install] PostgreSQL user + database…"
-sudo -u postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname='$DB_USER'" | grep -q 1 \
-  || sudo -u postgres psql -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD';"
+if sudo -u postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname='$DB_USER'" | grep -q 1; then
+  sudo -u postgres psql -c "ALTER USER $DB_USER WITH PASSWORD '$DB_PASSWORD';"
+else
+  sudo -u postgres psql -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD';"
+fi
 sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" | grep -q 1 \
   || sudo -u postgres psql -c "CREATE DATABASE $DB_NAME OWNER $DB_USER;"
 sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;"
