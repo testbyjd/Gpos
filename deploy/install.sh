@@ -65,6 +65,8 @@ sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;
 
 echo "[install] Backend (Laravel)…"
 cd "$APP_DIR/backend"
+mkdir -p bootstrap/cache storage/framework/{cache,sessions,views} storage/logs
+chmod -R ug+rwx bootstrap/cache storage
 if [[ ! -f .env ]]; then
   cp .env.example .env
 fi
