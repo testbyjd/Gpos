@@ -61,7 +61,6 @@ cd "$APP_DIR/backend"
 if [[ ! -f .env ]]; then
   cp .env.example .env
 fi
-php artisan key:generate --force
 
 # Patch production .env values.
 sed -i "s|^APP_ENV=.*|APP_ENV=production|" .env
@@ -77,6 +76,7 @@ sed -i "s|^CACHE_STORE=.*|CACHE_STORE=file|" .env
 sed -i "s|^QUEUE_CONNECTION=.*|QUEUE_CONNECTION=sync|" .env
 
 composer install --no-dev --optimize-autoloader --no-interaction
+grep -q '^APP_KEY=base64:' .env || php artisan key:generate --force
 chown -R www-data:www-data storage bootstrap/cache
 chmod -R ug+rwx storage bootstrap/cache
 php artisan migrate --force
