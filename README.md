@@ -25,10 +25,13 @@ GPOS/
 
 ## Getting Started
 
-Detailed setup har sub-project ke apne README mein hai:
+**Local dev** — har sub-project ka README:
 - [`backend/README.md`](./backend/README.md)
 - [`frontend/README.md`](./frontend/README.md)
 - [`print-bridge/README.md`](./print-bridge/README.md)
+
+**Production VPS** (Nginx + PostgreSQL + Certbot, no Docker):
+- [`deploy/README.md`](./deploy/README.md)
 
 ## Tech Stack
 

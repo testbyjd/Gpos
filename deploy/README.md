@@ -1,62 +1,117 @@
-# GPOS Deployment — single VPS
+# GPOS — VPS deploy (Nginx + PostgreSQL + Certbot)
 
-One VPS runs the whole stack. Registers and the owner reach it over the
-internet.
+No Docker. Standard Ubuntu stack — same as tum pehle karte thay.
 
 ```
-caddy :80/:443 ── /api → backend (Laravel/FrankenPHP)
-               └─ /    → frontend (Next.js)
-backend → postgres
+Internet ──► Nginx :443 (Certbot SSL)
+                ├─ /api/*   → PHP 8.3-FPM (Laravel)
+                ├─ /pos/*   → Node (Next.js standalone)
+                ├─ /login   → redirect → /pos/login
+                └─ /        → static coming soon
+             PostgreSQL (local)
 ```
 
-> **Note:** VPS-only means billing needs internet — if the shop's connection
-> drops, the registers cannot reach the server. (The POS still queues a sale in
-> the browser tab while it is open, but a reload/restart needs connectivity.)
+## Prerequisites
 
-## Setup
+- Ubuntu 22.04 or 24.04 VPS
+- Domain DNS → server IP (Cloudflare **DNS only** / gray cloud is fine)
+- Git access to this repo
 
-1. Install Docker + Docker Compose on the VPS, then:
-   ```sh
-   cd deploy
-   cp .env.example .env
-   ```
-2. Set a strong `DB_PASSWORD` and your `APP_URL` (domain or `http://<vps-ip>`).
-3. Generate the app key and paste it into `.env` as `APP_KEY`:
-   ```sh
-   docker compose run --rm backend php artisan key:generate --show
-   ```
-4. (HTTPS) If you have a domain, edit `Caddyfile`: replace `:80` with your
-   domain (e.g. `pos.example.com`) — Caddy auto-provisions a TLS cert. Make sure
-   ports 80/443 are open and DNS points at the VPS.
-5. Start everything:
-   ```sh
-   docker compose up -d --build
-   ```
-6. Seed the first store + users (one time):
-   ```sh
-   docker compose exec backend php artisan db:seed --class=GposSeeder --force
-   ```
-7. Open `http(s)://<your-domain-or-ip>/`.
+## 1. Clone on server
 
-## Operations
-
-```sh
-# logs
-docker compose logs -f backend
-
-# update to new code
-git pull && docker compose up -d --build
-
-# manual DB backup (run on a schedule via host cron for safety)
-docker compose exec -T postgres pg_dump -Fc -U gpos gpos > gpos-$(date +%F).dump
-
-# restore a dump
-cat gpos-YYYY-MM-DD.dump | docker compose exec -T postgres \
-  pg_restore --clean --if-exists --no-owner -U gpos -d gpos
+```bash
+ssh root@YOUR_SERVER_IP
+git clone https://github.com/testbyjd/Gpos.git /opt/gpos
+cd /opt/gpos
 ```
 
-## Notes
-- `frontend` and `backend` share one origin via Caddy, so there is no CORS and
-  no server IP baked into the browser bundle.
-- Take regular DB backups (the `pg_dump` above) — there is no second copy in
-  this setup.
+## 2. Run installer
+
+```bash
+# HTTPS + seed email (recommended)
+sudo CERTBOT_EMAIL=you@mail.com bash deploy/install.sh
+
+# HTTP only first (skip certbot)
+sudo RUN_CERTBOT=0 bash deploy/install.sh
+```
+
+Installer kya karta hai:
+- PostgreSQL, PHP 8.3-FPM, Nginx, Node 22, Composer, Certbot
+- Laravel `composer install`, migrate, config cache
+- Next.js build + systemd service `gpos-frontend`
+- Nginx site `deploy/nginx/gondaltrader.com.conf`
+
+## 3. Seed shop users (one time)
+
+```bash
+cd /opt/gpos/backend
+php artisan db:seed --class=GposSeeder --force
+```
+
+| Role | Email | Password |
+|------|-------|----------|
+| Owner | gondaljpj@gmail.com | Shehzad91 |
+| Manager | shahbaz@gondal.local | Shahbaz27 |
+| Cashier | casher1@gondal.com | Cashier38 |
+
+## 4. Open the app
+
+- Staff login: `https://gondaltrader.com/login`
+- POS: `https://gondaltrader.com/pos`
+- API health: `https://gondaltrader.com/api/v1/health`
+
+## SSL (manual Certbot)
+
+Agar install ke waqt email nahi di:
+
+```bash
+sudo certbot --nginx -d gondaltrader.com -d www.gondaltrader.com
+```
+
+Cloudflare pe **DNS only** rakho jab tak Certbot complete na ho.
+
+## Updates (git pull)
+
+```bash
+cd /opt/gpos
+git pull
+
+cd backend
+composer install --no-dev --optimize-autoloader --no-interaction
+php artisan migrate --force
+php artisan config:cache
+
+cd ../frontend
+npm ci
+NEXT_PUBLIC_API_BASE_URL=/api/v1 npm run build
+cp -r .next/static .next/standalone/.next/static
+cp -r public .next/standalone/public
+
+sudo systemctl restart gpos-frontend
+sudo systemctl reload php8.3-fpm nginx
+```
+
+## DB backup
+
+```bash
+sudo -u postgres pg_dump -Fc gpos > gpos-$(date +%F).dump
+```
+
+## Files
+
+| Path | Purpose |
+|------|---------|
+| `deploy/install.sh` | One-shot server setup |
+| `deploy/nginx/gondaltrader.com.conf` | Nginx vhost |
+| `deploy/systemd/gpos-frontend.service` | Next.js service |
+| `deploy/www/index.html` | Coming soon page at `/` |
+
+## Custom domain / path
+
+Edit `DOMAIN` and nginx `server_name` if not `gondaltrader.com`:
+
+```bash
+sudo DOMAIN=myshop.com CERTBOT_EMAIL=me@mail.com bash deploy/install.sh
+```
+
+`APP_DIR` default: `/opt/gpos`

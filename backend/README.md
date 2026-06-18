@@ -1,12 +1,14 @@
 # Backend — Laravel API
 
-Modular Laravel 11 API · PostgreSQL · Sanctum · **offline sync** (`client_id` idempotency).
+Modular Laravel 11 API · PostgreSQL · Sanctum.
 
-## Quick start
+## Local dev
 
 ```bash
-# from repo root — PostgreSQL
-docker compose up -d
+# PostgreSQL (Ubuntu)
+sudo apt install postgresql
+sudo -u postgres createuser -P gpos
+sudo -u postgres createdb -O gpos gpos
 
 cd backend
 cp .env.example .env
@@ -20,38 +22,33 @@ API base: `http://localhost:8000/api/v1`
 
 | Endpoint | Purpose |
 |----------|---------|
-| `GET /api/v1/health` | Connection check (POS online indicator) |
-| `POST /api/v1/sync/push` | Offline sales replay (idempotent by `client_id`) |
-| `GET /api/v1/sync/pull?since=` | Catalog delta for local cache |
+| `GET /api/v1/health` | Connection check |
+| `POST /api/v1/sync/push` | POS sale submit |
+| `POST /api/v1/auth/login` | Staff login |
 
-Full contract: [`docs/api/sync.md`](../docs/api/sync.md)
+## Production (VPS)
+
+See [`deploy/README.md`](../deploy/README.md) — Nginx + PHP-FPM + Certbot, no Docker.
 
 ## Structure
 
 ```
 app/Modules/
   Auth/       stores, users (role: owner|manager|cashier)
-  Inventory/  products, categories, stock_movements, moving-avg
-  Sales/      sales (+ client_id UUID), lines, payments
+  Inventory/  products, categories, stock_movements
+  Sales/      sales, lines, payments, till
   Customers/  khata customers
-  Vendors/    purchases, payables (next)
-  Sync/       push/pull endpoints, sync_log audit
+  Vendors/    purchases, payables
+  Sync/       push endpoint
+  Reports/    dashboard, P&L
 ```
 
 Module routes auto-load from `app/Modules/*/Routes/api.php` under `/api/v1`.
 
-## Offline sync rules (locked)
+## Seed users
 
-1. POS writes sales locally first (IndexedDB) — frontend Phase 3.
-2. Each sale has a **client-generated UUID** (`client_id`).
-3. Duplicate push → `already_synced`, no double stock hit.
-4. Pull refreshes products/customers changed since `since` timestamp.
+After `migrate --seed` or `db:seed --class=GposSeeder`:
+- Owner: `gondaljpj@gmail.com` / `Shehzad91`
+- Cashier: `casher1@gondal.com` / `Cashier38`
 
-See [`docs/decisions/05-offline-sync.md`](../docs/decisions/05-offline-sync.md).
-
-## Dev seed
-
-After `migrate --seed`:
-- Store: Gondal Traders
-- User: `cashier@gondal.local` / `password`
-- Sample product: Cooking Oil 1L (barcode `8964000123456`)
+Full list: [`deploy/README.md`](../deploy/README.md)
