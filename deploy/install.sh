@@ -82,6 +82,7 @@ sed -i "s|^SESSION_DRIVER=.*|SESSION_DRIVER=file|" .env
 sed -i "s|^CACHE_STORE=.*|CACHE_STORE=file|" .env
 sed -i "s|^QUEUE_CONNECTION=.*|QUEUE_CONNECTION=sync|" .env
 
+export COMPOSER_ALLOW_SUPERUSER=1
 composer install --no-dev --optimize-autoloader --no-interaction
 grep -q '^APP_KEY=base64:' .env || php artisan key:generate --force
 chown -R www-data:www-data storage bootstrap/cache
