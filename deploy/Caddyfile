@@ -1,0 +1,19 @@
+# Edge proxy: one origin for the register browser (no CORS, no baked-in IP).
+# Plain HTTP for the shop LAN. For the public VPS, swap `:80` for your domain
+# (e.g. `pos.example.com`) and Caddy will auto-provision HTTPS.
+{
+	admin off
+	auto_https off
+}
+
+:80 {
+	encode gzip
+
+	handle /api/* {
+		reverse_proxy backend:8000
+	}
+
+	handle {
+		reverse_proxy frontend:3000
+	}
+}

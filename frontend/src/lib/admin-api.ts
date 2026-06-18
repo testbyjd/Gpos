@@ -1,0 +1,100 @@
+import { apiFetch } from "./api";
+
+export interface ProductRow {
+  id: number;
+  category: string | null;
+  sku: string | null;
+  barcode: string | null;
+  name: string;
+  unit: string;
+  avg_cost: number;
+  sell_price: number;
+  stock_qty: number;
+  low_stock_threshold: number;
+  expiry_date: string | null;
+  is_active: boolean;
+}
+
+export interface VendorRow {
+  id: number;
+  name: string;
+  phone?: string | null;
+  balance: string | number;
+  is_active: boolean;
+}
+
+export interface CustomerRow {
+  id: number;
+  code: string | null;
+  name: string;
+  phone: string | null;
+  balance: string | number;
+  is_active: boolean;
+}
+
+export interface PurchaseRow {
+  id: number;
+  grn_no: string;
+  vendor?: VendorRow;
+  subtotal: string | number;
+  paid_amount: string | number;
+  balance_amount: string | number;
+  received_at: string;
+  lines: Array<{ id: number; product?: ProductRow; qty: string | number; unit_cost: string | number }>;
+}
+
+export function listProducts() {
+  return apiFetch<{ data: ProductRow[] }>("/inventory/products?per_page=500");
+}
+
+export function listVendors() {
+  return apiFetch<{ data: VendorRow[] }>("/vendors");
+}
+
+export function listCustomers() {
+  return apiFetch<{ data: CustomerRow[] }>("/customers");
+}
+
+export function getCustomerLedger(id: number) {
+  return apiFetch<{ customer: CustomerRow; entries: Array<{ id: number; type: string; amount: string | number; balance_after: string | number; note: string | null; created_at: string }> }>(`/customers/${id}/ledger`);
+}
+
+export function listPurchases() {
+  return apiFetch<{ data: PurchaseRow[] }>("/purchases");
+}
+
+export function getPayables() {
+  return apiFetch<{ total_payable: number; vendors: VendorRow[]; open_invoices: PurchaseRow[] }>("/payables");
+}
+
+export function getDashboard() {
+  return apiFetch<{
+    metrics: { net_sales: number; cash_in_till: number; card_wallet: number; khata_extended: number };
+    recent_sales: Array<{ invoice_no: string; customer: string; amount: number; payment: string; time: string }>;
+    low_stock: Array<{ id: number; name: string; unit: string; stock_qty: string | number; low_stock_threshold: string | number }>;
+    receivable_total: number;
+  }>("/reports/dashboard");
+}
+
+export function getReports() {
+  return apiFetch<{
+    gross_sales: number;
+    gross_profit: number;
+    net_receivable: number;
+    payment_breakdown: Array<{ method: string; amount: number }>;
+    profit_by_category: Array<{ category: string; sales: number; cost: number; profit: number; margin: number }>;
+    top_items: Array<{ name: string; qty: number; unit: string; amount: number }>;
+  }>("/reports/summary");
+}
+
+export function getUsersSettings() {
+  return apiFetch<{
+    data: Array<{ id: number; name: string; email: string; role: string; is_active: boolean; store_id: number | null }>;
+    settings: {
+      store_name: string;
+      currency: string;
+      timezone: string;
+      print_bridge: Array<{ device: string; connection: string; state: string }>;
+    };
+  }>("/users");
+}

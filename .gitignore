@@ -1,0 +1,38 @@
+# ---- OS / Editor ----
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# ---- Env / secrets ----
+.env
+.env.*
+!.env.example
+
+# ---- Backend (Laravel / PHP) ----
+backend/vendor/
+backend/node_modules/
+backend/storage/*.key
+backend/storage/framework/
+backend/storage/logs/
+backend/bootstrap/cache/
+backend/.phpunit.result.cache
+
+# ---- Frontend (Next.js / Node) ----
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/.turbo/
+frontend/coverage/
+
+# ---- Print bridge (Node) ----
+print-bridge/node_modules/
+print-bridge/dist/
+
+# ---- Logs ----
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

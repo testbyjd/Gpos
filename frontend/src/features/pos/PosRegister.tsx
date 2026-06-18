@@ -1,0 +1,362 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { CheckCircle2 } from "lucide-react";
+import { PosTopBar } from "./components/PosTopBar";
+import { ProductSearch } from "./components/ProductSearch";
+import { CategoryChips } from "./components/CategoryChips";
+import { ProductGrid } from "./components/ProductGrid";
+import { CartPanel } from "./components/CartPanel";
+import { PaymentModal } from "./components/PaymentModal";
+import { SaleSuccessModal, type SaleResult } from "./components/SaleSuccessModal";
+import { fetchCatalog } from "./api/catalog";
+import { fetchPosCustomers } from "./api/customers";
+import { submitSale } from "./api/sale";
+import { recordSync } from "@/lib/sync-status";
+import type { CartLine, HeldCart, PaymentMethod, Product, PosCustomer } from "./types";
+
+const CATALOG_CACHE_KEY = "gpos.pos.catalog.v1";
+
+interface CatalogCache {
+  products: Product[];
+  categories: string[];
+}
+
+export function PosRegister() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<readonly string[]>(["All"]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [catalogError, setCatalogError] = useState(false);
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState<string>("All");
+  const [lines, setLines] = useState<CartLine[]>([]);
+  const [customers, setCustomers] = useState<PosCustomer[]>([]);
+  const [customer, setCustomer] = useState("Walk-in Customer");
+  const [customerId, setCustomerId] = useState<number | null>(null);
+  const [discount, setDiscount] = useState(0);
+  const [payment, setPayment] = useState<PaymentMethod>("cash");
+  const [heldCarts, setHeldCarts] = useState<HeldCart[]>([]);
+  const [toast, setToast] = useState<string | null>(null);
+  const [payOpen, setPayOpen] = useState(false);
+  const [saleResult, setSaleResult] = useState<SaleResult | null>(null);
+
+  const searchRef = useRef<HTMLInputElement>(null);
+  // Stable id for the current checkout so a retry can't create a duplicate sale.
+  const saleClientId = useRef<string | null>(null);
+
+  const subtotal = lines.reduce((s, l) => s + l.product.price * l.qty, 0);
+  const total = Math.max(0, subtotal - discount);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return products.filter((p) => {
+      const inCat = category === "All" || p.category === category;
+      const inQuery =
+        !q ||
+        p.name.toLowerCase().includes(q) ||
+        p.barcode?.includes(q);
+      return inCat && inQuery;
+    });
+  }, [query, category, products]);
+
+  function addProduct(p: Product) {
+    setLines((prev) => {
+      const existing = prev.find((l) => l.product.id === p.id);
+      const step = p.fractional ? 0.5 : 1;
+      if (existing) {
+        const updated = { ...existing, qty: existing.qty + step };
+        return [updated, ...prev.filter((l) => l.product.id !== p.id)];
+      }
+      return [{ product: p, qty: step }, ...prev];
+    });
+  }
+
+  function changeQty(id: string, delta: number) {
+    setLines((prev) =>
+      prev
+        .map((l) =>
+          l.product.id === id
+            ? { ...l, qty: Math.round((l.qty + delta) * 1000) / 1000 }
+            : l,
+        )
+        .filter((l) => l.qty > 0),
+    );
+  }
+
+  function setLineQty(id: string, qty: number) {
+    const rounded = Math.round(qty * 1000) / 1000;
+    if (rounded <= 0) {
+      removeLine(id);
+      return;
+    }
+    setLines((prev) =>
+      prev.map((l) => (l.product.id === id ? { ...l, qty: rounded } : l)),
+    );
+  }
+
+  function removeLine(id: string) {
+    setLines((prev) => prev.filter((l) => l.product.id !== id));
+  }
+
+  function selectCustomer(id: number | null) {
+    setCustomerId(id);
+    setCustomer(id === null ? "Walk-in Customer" : customers.find((c) => c.id === id)?.name ?? "Customer");
+  }
+
+  function resetSale() {
+    setLines([]);
+    setDiscount(0);
+    setCustomer("Walk-in Customer");
+    setCustomerId(null);
+    setPayment("cash");
+  }
+
+  function holdCart() {
+    if (lines.length === 0) return;
+    setHeldCarts((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        label: `#${prev.length + 1}`,
+        lines,
+        customer,
+        customerId,
+        heldAt: Date.now(),
+      },
+    ]);
+    resetSale();
+    showToast("Cart held");
+  }
+
+  function resumeCart(id: string) {
+    const held = heldCarts.find((h) => h.id === id);
+    if (!held) return;
+    setLines(held.lines);
+    setCustomer(held.customer);
+    setCustomerId(held.customerId);
+    setHeldCarts((prev) => prev.filter((h) => h.id !== id));
+  }
+
+  function checkout() {
+    if (lines.length === 0) return;
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      showToast("Internet nahi — billing band hai. Connection aane par dobara try karein.");
+      return;
+    }
+    saleClientId.current = crypto.randomUUID();
+    setPayOpen(true);
+  }
+
+  // Online-only: the sale completes only when the server confirms it.
+  // No internet => no bill (throws, cart stays, cashier retries).
+  async function confirmSale(tendered: number, change: number) {
+    let invoice: string;
+    try {
+      const res = await submitSale({
+        clientId: saleClientId.current ?? crypto.randomUUID(),
+        lines, discount, total, method: payment, tendered, change, customerId,
+      });
+      invoice = res.invoiceNo;
+    } catch {
+      showToast("Internet ya server nahi mila — bill save NAHI hua. Connection check karke dobara try karein.");
+      throw new Error("sale-failed");
+    }
+    saleClientId.current = null;
+    recordSync();
+
+    setPayOpen(false);
+    setSaleResult({
+      invoice,
+      total,
+      tendered,
+      change,
+      method: payment,
+      customer,
+    });
+    resetSale();
+  }
+
+  function startNewSale() {
+    setSaleResult(null);
+    searchRef.current?.focus();
+  }
+
+  function showToast(msg: string) {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2200);
+  }
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (payOpen || saleResult) return; // an open modal owns the keyboard
+      if (e.key === "F2") {
+        e.preventDefault();
+        searchRef.current?.focus();
+        searchRef.current?.select();
+      } else if (e.key === "F4") {
+        e.preventDefault();
+        holdCart();
+      } else if (e.key === "F9") {
+        e.preventDefault();
+        checkout();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines, discount, customer, heldCarts, payOpen, saleResult]);
+
+  useEffect(() => {
+    let alive = true;
+    let hadCachedCatalog = false;
+
+    Promise.resolve().then(() => {
+      const cached = window.localStorage.getItem(CATALOG_CACHE_KEY);
+      if (!cached || !alive) return;
+
+      try {
+        const parsed = JSON.parse(cached) as CatalogCache;
+        if (parsed.products.length === 0) return;
+        hadCachedCatalog = true;
+        setProducts(parsed.products);
+        setCategories(parsed.categories);
+        setCatalogLoading(false);
+      } catch {
+        window.localStorage.removeItem(CATALOG_CACHE_KEY);
+      }
+    });
+
+    fetchCatalog()
+      .then((catalog) => {
+        if (!alive) return;
+        setProducts(catalog.products);
+        setCategories(catalog.categories);
+        setCatalogError(false);
+        window.localStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify(catalog));
+        setCatalogLoading(false);
+        if (!catalog.categories.includes(category)) setCategory("All");
+      })
+      .catch(() => {
+        if (!alive || hadCachedCatalog) return;
+        // Backend down and no cached catalog yet — show a clear empty state
+        // instead of fake products (never let cashiers sell items that
+        // don't exist in the real inventory).
+        setCatalogError(true);
+        setCatalogLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Khata customers for the cart selector (best-effort — POS still bills without it).
+  useEffect(() => {
+    let alive = true;
+    fetchPosCustomers()
+      .then((res) => alive && setCustomers(res))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  return (
+    <div className="flex h-screen flex-col overflow-hidden bg-background">
+      <PosTopBar />
+
+      <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,0.34fr)_minmax(0,0.66fr)] overflow-hidden lg:grid-cols-[minmax(0,1fr)_500px] lg:grid-rows-none xl:grid-cols-[minmax(0,1fr)_560px] 2xl:grid-cols-[minmax(0,1fr)_620px]">
+        {/* Left: catalog */}
+        <section className="flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-border/70 p-3 lg:p-3.5">
+          <ProductSearch
+            value={query}
+            onValueChange={setQuery}
+            inputRef={searchRef}
+            resultCount={filtered.length}
+          />
+          <div className="mt-2.5">
+            <CategoryChips
+              categories={categories}
+              active={category}
+              onSelect={setCategory}
+            />
+          </div>
+          <div className="mt-2.5 flex-1 overflow-y-auto pr-1">
+            {catalogLoading ? (
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                {Array.from({ length: 10 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="min-h-[8.75rem] animate-pulse rounded-lg border border-border/80 bg-card p-2.5"
+                  >
+                    <div className="mb-3 h-9 w-9 rounded-md bg-muted" />
+                    <div className="h-4 rounded bg-muted" />
+                    <div className="mt-2 h-4 w-2/3 rounded bg-muted" />
+                    <div className="mt-8 h-5 w-1/2 rounded bg-muted" />
+                  </div>
+                ))}
+              </div>
+            ) : catalogError ? (
+              <div className="flex flex-1 flex-col items-center justify-center gap-2 py-16 text-center text-muted-foreground">
+                <CheckCircle2 className="h-10 w-10 opacity-30" />
+                <p className="text-sm font-semibold text-foreground">Catalog load nahi hua</p>
+                <p className="max-w-xs text-xs">
+                  Internet se ek baar connect karein taake products download ho
+                  jayein. Uske baad offline billing chalega.
+                </p>
+              </div>
+            ) : (
+              <ProductGrid products={filtered} onAdd={addProduct} />
+            )}
+          </div>
+        </section>
+
+        {/* Right: cart */}
+        <div className="flex h-full min-h-0 w-full overflow-hidden">
+          <CartPanel
+            lines={lines}
+            customers={customers}
+            customerId={customerId}
+            onCustomerChange={selectCustomer}
+            discount={discount}
+            onDiscountChange={setDiscount}
+            payment={payment}
+            onPaymentChange={setPayment}
+            onQty={changeQty}
+            onSetQty={setLineQty}
+            onRemove={removeLine}
+            onClear={resetSale}
+            onHold={holdCart}
+            onCheckout={checkout}
+            heldCarts={heldCarts}
+            onResume={resumeCart}
+          />
+        </div>
+      </div>
+
+      {/* Payment calculator */}
+      {payOpen && (
+        <PaymentModal
+          total={total}
+          payment={payment}
+          customer={customer}
+          onConfirm={confirmSale}
+          onClose={() => setPayOpen(false)}
+        />
+      )}
+
+      {/* Change / receipt confirmation — stays open until cashier dismisses */}
+      {saleResult && (
+        <SaleSuccessModal sale={saleResult} onClose={startNewSale} />
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div className="animate-fade-in fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-success/30 bg-success px-4 py-2.5 text-sm font-medium text-white shadow-lg">
+          <CheckCircle2 className="h-5 w-5" />
+          {toast}
+        </div>
+      )}
+    </div>
+  );
+}

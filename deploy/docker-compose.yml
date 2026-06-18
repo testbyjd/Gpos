@@ -1,0 +1,76 @@
+# ============================================================================
+# GPOS — single VPS deployment (one box runs everything).
+#   cd deploy && cp .env.example .env   (fill it in)
+#   docker compose up -d --build
+# Then open http://<vps-ip>/  (or your domain once HTTPS is set in Caddyfile).
+# ============================================================================
+name: gpos
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-gpos}
+      POSTGRES_USER: ${DB_USERNAME:-gpos}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-gpos}
+    volumes:
+      - gpos_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-gpos} -d ${DB_DATABASE:-gpos}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_KEY: ${APP_KEY}
+      APP_URL: ${APP_URL:-http://localhost}
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_DATABASE: ${DB_DATABASE:-gpos}
+      DB_USERNAME: ${DB_USERNAME:-gpos}
+      DB_PASSWORD: ${DB_PASSWORD:-gpos}
+      LOG_CHANNEL: stderr
+      CACHE_STORE: file
+      SESSION_DRIVER: file
+      QUEUE_CONNECTION: sync
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: /api/v1
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - backend
+
+volumes:
+  gpos_pg_data:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,187 @@
+@import "tailwindcss";
+
+/* Enable class-based dark mode (next-themes toggles .dark on <html>) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: #eef3f8;
+  --surface: #ffffff;
+  --card: #ffffff;
+  --card-hover: #f8fbfd;
+  --border: #d8e1ec;
+  --input: #ffffff;
+  --foreground: #0f172a;
+  --muted: #edf3f7;
+  --muted-foreground: #64748b;
+
+  --primary: #059669;
+  --primary-hover: #047857;
+  --primary-foreground: #ffffff;
+
+  --accent: #4f46e5;
+  --accent-foreground: #ffffff;
+
+  --success: #16a34a;
+  --warning: #d97706;
+  --danger: #dc2626;
+  --danger-foreground: #ffffff;
+
+  --ring: #059669;
+  --radius: 0.5rem;
+}
+
+.dark {
+  --background: #090d12;
+  --surface: #0f151d;
+  --card: #141b24;
+  --card-hover: #182231;
+  --border: #233043;
+  --input: #111923;
+  --foreground: #e8eef5;
+  --muted: #1a2433;
+  --muted-foreground: #8a9bb0;
+
+  --primary: #10b981;
+  --primary-hover: #34d399;
+  --primary-foreground: #04110b;
+
+  --accent: #818cf8;
+  --accent-foreground: #0b1020;
+
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #f87171;
+  --danger-foreground: #1a0606;
+
+  --ring: #10b981;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-card: var(--card);
+  --color-card-hover: var(--card-hover);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+
+  --color-ring: var(--ring);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 0.25rem);
+  --radius-sm: calc(var(--radius) - 0.4rem);
+}
+
+* {
+  border-color: var(--border);
+}
+
+body {
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--background), white 2%), var(--background));
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+}
+
+/* Thin, theme-aware scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 9999px;
+}
+
+/* Brand-tinted text selection */
+::selection {
+  background: color-mix(in oklab, var(--primary), transparent 70%);
+  color: var(--foreground);
+}
+
+/* Nicer scrollbar interaction */
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade-in {
+  animation: fade-in 0.15s ease-out;
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+/* Gentle entrance for page content */
+.animate-rise {
+  animation: rise-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Reusable hover-lift for cards & tiles */
+.card-lift {
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease,
+    border-color 0.16s ease;
+}
+.card-lift:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in oklab, var(--primary), transparent 65%);
+  box-shadow: 0 10px 30px -16px color-mix(in oklab, var(--foreground), transparent 78%);
+}
+
+/* Soft radial brand glow for auth / empty backdrops */
+.brand-glow {
+  background:
+    radial-gradient(60rem 32rem at 50% -8rem, color-mix(in oklab, var(--primary), transparent 88%), transparent 70%),
+    linear-gradient(180deg, color-mix(in oklab, var(--background), white 2%), var(--background));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-rise {
+    animation: none;
+  }
+  .card-lift:hover {
+    transform: none;
+  }
+}

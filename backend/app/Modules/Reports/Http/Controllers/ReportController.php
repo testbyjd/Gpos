@@ -1,0 +1,103 @@
+<?php
+
+namespace App\Modules\Reports\Http\Controllers;
+
+use App\Modules\Customers\Models\Customer;
+use App\Modules\Inventory\Models\Product;
+use App\Modules\Sales\Models\Sale;
+use App\Modules\Sales\Models\SaleLine;
+use App\Modules\Sales\Models\SalePayment;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Routing\Controller;
+
+class ReportController extends Controller
+{
+    public function dashboard(): JsonResponse
+    {
+        $today = now()->startOfDay();
+        $sales = Sale::with(['customer', 'payments'])->where('sold_at', '>=', $today)->latest('sold_at')->get();
+        $cash = (float) SalePayment::where('method', 'cash')->whereHas('sale', fn ($q) => $q->where('sold_at', '>=', $today))->sum('amount');
+        $card = (float) SalePayment::where('method', 'card')->whereHas('sale', fn ($q) => $q->where('sold_at', '>=', $today))->sum('amount');
+        $wallet = (float) SalePayment::where('method', 'wallet')->whereHas('sale', fn ($q) => $q->where('sold_at', '>=', $today))->sum('amount');
+        $khata = (float) SalePayment::where('method', 'khata')->whereHas('sale', fn ($q) => $q->where('sold_at', '>=', $today))->sum('amount');
+
+        return response()->json([
+            'metrics' => [
+                'net_sales' => (float) $sales->sum('total'),
+                'cash_in_till' => $cash,
+                'card_wallet' => $card + $wallet,
+                'khata_extended' => $khata,
+            ],
+            'recent_sales' => $sales->take(8)->map(fn (Sale $sale) => [
+                'invoice_no' => $sale->invoice_no,
+                'customer' => $sale->customer?->name ?? 'Walk-in Customer',
+                'amount' => (float) $sale->total,
+                'payment' => $sale->payments->pluck('method')->implode(' + '),
+                'time' => $sale->sold_at?->diffForHumans(),
+            ])->values(),
+            'low_stock' => Product::query()
+                ->whereColumn('stock_qty', '<=', 'low_stock_threshold')
+                ->where('is_active', true)
+                ->orderBy('stock_qty')
+                ->limit(8)
+                ->get(['id', 'name', 'unit', 'stock_qty', 'low_stock_threshold']),
+            'receivable_total' => (float) Customer::sum('balance'),
+        ]);
+    }
+
+    public function reports(): JsonResponse
+    {
+        $today = now()->startOfDay();
+
+        $payments = SalePayment::query()
+            ->selectRaw('method, SUM(amount) as amount')
+            ->whereHas('sale', fn ($q) => $q->where('sold_at', '>=', $today))
+            ->groupBy('method')
+            ->get()
+            ->map(fn ($row) => ['method' => $row->method, 'amount' => (float) $row->amount]);
+
+        $profit = SaleLine::query()
+            ->join('products', 'products.id', '=', 'sale_lines.product_id')
+            ->leftJoin('categories', 'categories.id', '=', 'products.category_id')
+            ->join('sales', 'sales.id', '=', 'sale_lines.sale_id')
+            ->where('sales.sold_at', '>=', $today)
+            ->selectRaw("COALESCE(categories.name, 'Uncategorized') as category")
+            ->selectRaw('SUM(sale_lines.line_total) as sales')
+            ->selectRaw('SUM(sale_lines.cost_at_sale * sale_lines.qty) as cost')
+            ->selectRaw('SUM(sale_lines.line_total - (sale_lines.cost_at_sale * sale_lines.qty)) as profit')
+            ->groupBy('categories.name')
+            ->get()
+            ->map(fn ($row) => [
+                'category' => $row->category,
+                'sales' => (float) $row->sales,
+                'cost' => (float) $row->cost,
+                'profit' => (float) $row->profit,
+                'margin' => (float) $row->sales > 0 ? round(((float) $row->profit / (float) $row->sales) * 100, 1) : 0,
+            ]);
+
+        $topItems = SaleLine::query()
+            ->join('products', 'products.id', '=', 'sale_lines.product_id')
+            ->join('sales', 'sales.id', '=', 'sale_lines.sale_id')
+            ->where('sales.sold_at', '>=', $today)
+            ->selectRaw('products.name, products.unit, SUM(sale_lines.qty) as qty, SUM(sale_lines.line_total) as amount')
+            ->groupBy('products.name', 'products.unit')
+            ->orderByDesc('amount')
+            ->limit(8)
+            ->get()
+            ->map(fn ($row) => [
+                'name' => $row->name,
+                'qty' => (float) $row->qty,
+                'unit' => $row->unit,
+                'amount' => (float) $row->amount,
+            ]);
+
+        return response()->json([
+            'gross_sales' => (float) Sale::where('sold_at', '>=', $today)->sum('total'),
+            'gross_profit' => (float) $profit->sum('profit'),
+            'net_receivable' => (float) Customer::sum('balance'),
+            'payment_breakdown' => $payments,
+            'profit_by_category' => $profit,
+            'top_items' => $topItems,
+        ]);
+    }
+}

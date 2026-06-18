@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: gpos-postgres
+    restart: unless-stopped
+    ports:
+      - "55432:5432"
+    environment:
+      POSTGRES_DB: gpos
+      POSTGRES_USER: gpos
+      POSTGRES_PASSWORD: gpos
+    volumes:
+      - gpos_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gpos -d gpos"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  gpos_pg_data:
