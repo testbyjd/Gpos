@@ -18,4 +18,5 @@ Route::prefix('auth')->group(function () {
 Route::middleware(['auth:sanctum', 'role:owner'])->prefix('users')->group(function () {
     Route::get('/', [UserController::class, 'index']);
     Route::post('/', [UserController::class, 'store']);
+    Route::patch('/{user}/password', [UserController::class, 'updatePassword']);
 });

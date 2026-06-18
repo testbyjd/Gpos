@@ -47,6 +47,13 @@ export function listProducts() {
   return apiFetch<{ data: ProductRow[] }>("/inventory/products?per_page=500");
 }
 
+export function deleteProduct(id: number) {
+  return apiFetch<{ ok: boolean; action: "deleted" | "deactivated"; message: string }>(
+    `/inventory/products/${id}`,
+    { method: "DELETE" },
+  );
+}
+
 export function listVendors() {
   return apiFetch<{ data: VendorRow[] }>("/vendors");
 }
@@ -97,4 +104,11 @@ export function getUsersSettings() {
       print_bridge: Array<{ device: string; connection: string; state: string }>;
     };
   }>("/users");
+}
+
+export function updateUserPassword(id: number, password: string) {
+  return apiFetch<{ ok: boolean; message: string }>(`/users/${id}/password`, {
+    method: "PATCH",
+    body: JSON.stringify({ password }),
+  });
 }

@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { CalendarClock, Download, Plus, Upload } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { CalendarClock, Download, Plus, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
 import { FilterChips } from "@/components/ui/filter-chips";
 import { StatCard } from "@/components/ui/stat-card";
 import { formatMoney } from "@/lib/utils";
-import { listProducts, type ProductRow } from "@/lib/admin-api";
+import { deleteProduct, listProducts, type ProductRow } from "@/lib/admin-api";
 import {
   AdminShell,
   DataTable,
@@ -38,14 +38,35 @@ export default function InventoryPage() {
   const [search, setSearch] = useState("");
   const [state, setState] = useState<(typeof STATES)[number]>("All");
   const [category, setCategory] = useState("All");
+  const [notice, setNotice] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  const loadProducts = useCallback(() => {
+    listProducts()
+      .then((res) => setProducts(res.data))
+      .catch(() => setProducts([]));
+  }, []);
 
   useEffect(() => {
-    let alive = true;
-    listProducts().then((res) => alive && setProducts(res.data)).catch(() => alive && setProducts([]));
-    return () => {
-      alive = false;
-    };
-  }, []);
+    loadProducts();
+  }, [loadProducts]);
+
+  async function handleDelete(product: ProductRow) {
+    const usedHint = "Agar ye product kahin use ho chuka hai to sirf inactive hoga.";
+    if (!window.confirm(`"${product.name}" delete karna hai?\n\n${usedHint}`)) return;
+
+    setDeletingId(product.id);
+    setNotice(null);
+    try {
+      const res = await deleteProduct(product.id);
+      setProducts((prev) => prev.filter((p) => p.id !== product.id));
+      setNotice(res.message);
+    } catch {
+      setNotice("Delete failed. Try again.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   const categories = useMemo(() => ["All", ...Array.from(new Set(products.map((p) => p.category ?? "Uncategorized")))], [products]);
   const expiringSoon = useMemo(
@@ -79,6 +100,11 @@ export default function InventoryPage() {
       eyebrow="Products, stock and costing"
       actions={<div className="hidden gap-2 sm:flex"><Button variant="secondary" size="sm"><Upload className="h-4 w-4" />Import</Button><Button size="sm"><Plus className="h-4 w-4" />Product</Button></div>}
     >
+      {notice && (
+        <div className="mb-4 rounded-lg border border-border/80 bg-muted/60 px-4 py-3 text-sm font-semibold text-foreground">
+          {notice}
+        </div>
+      )}
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <PagePanel>
           <PanelHeader title="Product master" meta={`${filtered.length} of ${products.length} products · live API`} />
@@ -88,8 +114,8 @@ export default function InventoryPage() {
             <div className="ml-auto"><FilterChips options={categories} value={category} onChange={setCategory} aria-label="Filter by category" /></div>
           </div>
           <DataTable
-            columns={["Product", "SKU", "Category", "Stock", "Avg cost", "Price", "Expiry", "State"]}
-            minWidth="880px"
+            columns={["Product", "SKU", "Category", "Stock", "Avg cost", "Price", "Expiry", "State", ""]}
+            minWidth="960px"
             rows={filtered.map((p) => {
               const isLow = Number(p.stock_qty) <= Number(p.low_stock_threshold);
               return [
@@ -101,6 +127,16 @@ export default function InventoryPage() {
                 <span key="price" className="font-bold tabular-nums text-primary">{formatMoney(Number(p.sell_price))}</span>,
                 <span key="expiry">{expiryPill(p.expiry_date)}</span>,
                 <StatusPill key="state" tone={isLow ? "warn" : "good"}>{isLow ? "Low" : "OK"}</StatusPill>,
+                <button
+                  key="delete"
+                  type="button"
+                  onClick={() => handleDelete(p)}
+                  disabled={deletingId === p.id}
+                  aria-label={`Delete ${p.name}`}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-50"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>,
               ];
             })}
           />

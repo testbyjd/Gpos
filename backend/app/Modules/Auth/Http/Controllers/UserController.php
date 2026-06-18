@@ -51,4 +51,18 @@ class UserController extends Controller
 
         return response()->json(['data' => $user], 201);
     }
+
+    public function updatePassword(Request $request, User $user): JsonResponse
+    {
+        $data = $request->validate([
+            'password' => ['required', 'string', 'min:6', 'max:120'],
+        ]);
+
+        $user->update(['password' => Hash::make($data['password'])]);
+
+        return response()->json([
+            'ok' => true,
+            'message' => "Password updated for {$user->name}.",
+        ]);
+    }
 }

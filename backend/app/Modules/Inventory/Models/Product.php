@@ -29,4 +29,12 @@ class Product extends Model
     {
         return $this->belongsTo(Category::class);
     }
+
+    /** True when sales, purchases, or stock history reference this SKU. */
+    public function isInUse(): bool
+    {
+        return \DB::table('sale_lines')->where('product_id', $this->id)->exists()
+            || \DB::table('purchase_lines')->where('product_id', $this->id)->exists()
+            || \DB::table('stock_movements')->where('product_id', $this->id)->exists();
+    }
 }

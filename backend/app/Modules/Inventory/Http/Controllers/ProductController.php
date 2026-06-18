@@ -60,9 +60,23 @@ class ProductController extends Controller
 
     public function destroy(Product $product): JsonResponse
     {
-        $product->update(['is_active' => false]);
+        if ($product->isInUse()) {
+            $product->update(['is_active' => false]);
 
-        return response()->json(['ok' => true]);
+            return response()->json([
+                'ok' => true,
+                'action' => 'deactivated',
+                'message' => 'Product is used in sales, purchases, or stock history — marked inactive instead of deleted.',
+            ]);
+        }
+
+        $product->delete();
+
+        return response()->json([
+            'ok' => true,
+            'action' => 'deleted',
+            'message' => 'Product deleted.',
+        ]);
     }
 
     private function validated(Request $request, bool $partial = false): array
