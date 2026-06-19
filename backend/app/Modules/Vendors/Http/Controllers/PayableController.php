@@ -4,6 +4,7 @@ namespace App\Modules\Vendors\Http\Controllers;
 
 use App\Modules\Vendors\Models\Purchase;
 use App\Modules\Vendors\Models\Vendor;
+use App\Modules\Vendors\Models\VendorPayment;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -16,7 +17,7 @@ class PayableController extends Controller
         return response()->json([
             'total_payable' => (float) Vendor::sum('balance'),
             'vendors' => Vendor::where('balance', '>', 0)->orderByDesc('balance')->get(),
-            'open_invoices' => Purchase::with('vendor')->where('balance_amount', '>', 0)->latest('received_at')->get(),
+            'open_invoices' => Purchase::with(['vendor', 'lines.product:id,name,barcode'])->where('balance_amount', '>', 0)->latest('received_at')->get(),
         ]);
     }
 
@@ -28,7 +29,7 @@ class PayableController extends Controller
             'note' => ['nullable', 'string', 'max:255'],
         ]);
 
-        return DB::transaction(function () use ($data) {
+        return DB::transaction(function () use ($data, $request) {
             $purchase = Purchase::lockForUpdate()->with('vendor')->findOrFail($data['purchase_id']);
             $balance = (float) $purchase->balance_amount;
 
@@ -44,6 +45,14 @@ class PayableController extends Controller
             $vendor = Vendor::lockForUpdate()->findOrFail($purchase->vendor_id);
             $vendor->balance = max(0, (float) bcsub((string) $vendor->balance, (string) $amount, 2));
             $vendor->save();
+
+            VendorPayment::create([
+                'vendor_id' => $vendor->id,
+                'purchase_id' => $purchase->id,
+                'amount' => $amount,
+                'note' => $data['note'] ?? null,
+                'created_by' => $request->user()?->id,
+            ]);
 
             return response()->json([
                 'ok' => true,

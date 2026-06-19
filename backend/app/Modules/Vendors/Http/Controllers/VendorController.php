@@ -33,4 +33,19 @@ class VendorController extends Controller
 
         return response()->json(['data' => $vendor], 201);
     }
+
+    public function show(Vendor $vendor): JsonResponse
+    {
+        return response()->json([
+            'vendor' => $vendor,
+            'purchases' => $vendor->purchases()
+                ->with('lines.product:id,name,barcode')
+                ->latest('received_at')
+                ->get(),
+            'payments' => $vendor->payments()
+                ->with('purchase:id,grn_no')
+                ->latest()
+                ->get(),
+        ]);
+    }
 }

@@ -4,6 +4,7 @@ namespace App\Modules\Sync\Services;
 
 use App\Models\User;
 use App\Modules\Customers\Models\Customer;
+use App\Modules\Customers\Models\CustomerLedgerEntry;
 use App\Modules\Inventory\Models\Category;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Services\StockService;
@@ -100,6 +101,17 @@ class SaleSyncService
                     if ($customer) {
                         $customer->balance = bcadd((string) $customer->balance, (string) $payment['amount'], 2);
                         $customer->save();
+
+                        CustomerLedgerEntry::create([
+                            'customer_id' => $customer->id,
+                            'type' => 'sale_credit',
+                            'amount' => abs((float) $payment['amount']),
+                            'balance_after' => $customer->balance,
+                            'reference_type' => 'sale',
+                            'reference_id' => $sale->id,
+                            'note' => $sale->invoice_no,
+                            'created_by' => $user?->id,
+                        ]);
                     }
                 }
             }

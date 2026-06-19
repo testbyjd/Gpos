@@ -8,6 +8,7 @@ import { FilterChips } from "@/components/ui/filter-chips";
 import { formatMoney } from "@/lib/utils";
 import { getPayables, type PurchaseRow } from "@/lib/admin-api";
 import { VendorPaymentModal } from "@/features/admin/components/AdminActionModals";
+import { PurchaseDetailModal } from "@/features/admin/components/DetailDrawers";
 import { AdminShell, DataTable, PagePanel, PanelHeader, StatusPill } from "@/features/admin/components/AdminShell";
 
 const STATES = ["All", "Due", "Clear"] as const;
@@ -18,6 +19,7 @@ export default function PayablesPage() {
   const [search, setSearch] = useState("");
   const [state, setState] = useState<(typeof STATES)[number]>("All");
   const [showPayment, setShowPayment] = useState(false);
+  const [selected, setSelected] = useState<PurchaseRow | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   function loadPayables() {
@@ -57,6 +59,7 @@ export default function PayablesPage() {
           </div>
           <DataTable
             columns={["GRN", "Vendor", "Total", "Paid", "Balance", "State"]}
+            onRowClick={(i) => setSelected(filtered[i])}
             rows={filtered.map((p) => [
               <span key="grn" className="font-bold text-foreground">{p.grn_no}</span>,
               p.vendor?.name ?? "—",
@@ -85,6 +88,8 @@ export default function PayablesPage() {
           }}
         />
       )}
+
+      {selected && <PurchaseDetailModal purchase={selected} onClose={() => setSelected(null)} />}
     </AdminShell>
   );
 }

@@ -8,6 +8,7 @@ import { FilterChips } from "@/components/ui/filter-chips";
 import { formatMoney } from "@/lib/utils";
 import { listCustomers, type CustomerRow } from "@/lib/admin-api";
 import { CustomerFormModal } from "@/features/admin/components/AdminActionModals";
+import { CustomerDetailDrawer } from "@/features/admin/components/DetailDrawers";
 import { AdminShell, DataTable, PagePanel, PanelHeader, StatusPill } from "@/features/admin/components/AdminShell";
 
 const STATES = ["All", "Due", "Clear"] as const;
@@ -17,6 +18,7 @@ export default function KhataPage() {
   const [search, setSearch] = useState("");
   const [state, setState] = useState<(typeof STATES)[number]>("All");
   const [showAdd, setShowAdd] = useState(false);
+  const [selected, setSelected] = useState<CustomerRow | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -54,6 +56,7 @@ export default function KhataPage() {
           </div>
           <DataTable
             columns={["Customer", "Phone", "Code", "Balance", "State"]}
+            onRowClick={(i) => setSelected(filtered[i])}
             rows={filtered.map((customer) => [
               <span key="name" className="font-bold text-foreground">{customer.name}</span>,
               customer.phone ?? "—",
@@ -78,6 +81,16 @@ export default function KhataPage() {
             setCustomers((prev) => [...prev, c].sort((a, b) => a.name.localeCompare(b.name)));
             setNotice(`"${c.name}" add ho gaya.`);
           }}
+        />
+      )}
+
+      {selected && (
+        <CustomerDetailDrawer
+          customer={selected}
+          onClose={() => setSelected(null)}
+          onChanged={(updated) =>
+            setCustomers((prev) => prev.map((c) => (c.id === updated.id ? { ...c, ...updated } : c)))
+          }
         />
       )}
     </AdminShell>

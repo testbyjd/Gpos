@@ -10,6 +10,7 @@ Route::middleware(['auth:sanctum', 'role:owner,manager'])->group(function () {
     Route::prefix('vendors')->group(function () {
         Route::get('/', [VendorController::class, 'index']);
         Route::post('/', [VendorController::class, 'store']);
+        Route::get('/{vendor}', [VendorController::class, 'show']);
     });
 
     Route::prefix('purchases')->group(function () {

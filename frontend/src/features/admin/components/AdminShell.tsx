@@ -268,10 +268,14 @@ export function DataTable({
   columns,
   rows,
   minWidth = "720px",
+  onRowClick,
+  emptyLabel = "No matching records found.",
 }: {
   columns: string[];
   rows: ReactNode[][];
   minWidth?: string;
+  onRowClick?: (index: number) => void;
+  emptyLabel?: string;
 }) {
   return (
     <div className="overflow-x-auto">
@@ -289,12 +293,19 @@ export function DataTable({
           {rows.length === 0 ? (
             <tr>
               <td colSpan={columns.length} className="px-4 py-10 text-center text-sm text-muted-foreground">
-                No matching records found.
+                {emptyLabel}
               </td>
             </tr>
           ) : (
             rows.map((row, rowIndex) => (
-              <tr key={rowIndex} className="transition-colors hover:bg-card-hover">
+              <tr
+                key={rowIndex}
+                onClick={onRowClick ? () => onRowClick(rowIndex) : undefined}
+                className={cn(
+                  "transition-colors hover:bg-card-hover",
+                  onRowClick && "cursor-pointer",
+                )}
+              >
                 {row.map((cell, cellIndex) => (
                   <td key={cellIndex} className="px-4 py-3 align-middle">
                     {cell}

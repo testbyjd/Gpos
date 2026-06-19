@@ -113,8 +113,74 @@ export function createVendor(data: { name: string; phone?: string | null; addres
   });
 }
 
+export interface LedgerEntry {
+  id: number;
+  type: string;
+  amount: string | number;
+  balance_after: string | number;
+  note: string | null;
+  created_at: string;
+}
+
 export function getCustomerLedger(id: number) {
-  return apiFetch<{ customer: CustomerRow; entries: Array<{ id: number; type: string; amount: string | number; balance_after: string | number; note: string | null; created_at: string }> }>(`/customers/${id}/ledger`);
+  return apiFetch<{ customer: CustomerRow; entries: LedgerEntry[] }>(`/customers/${id}/ledger`);
+}
+
+export interface SalePayment {
+  id: number;
+  method: string;
+  amount: string | number;
+}
+
+export interface SaleRow {
+  id: number;
+  invoice_no: string;
+  customer_id: number | null;
+  customer?: CustomerRow | null;
+  cashier?: { id: number; name: string } | null;
+  subtotal: string | number;
+  discount: string | number;
+  total: string | number;
+  sold_at: string;
+  payments?: SalePayment[];
+}
+
+export interface SaleDetail extends SaleRow {
+  lines: Array<{
+    id: number;
+    qty: string | number;
+    unit_price: string | number;
+    line_total: string | number;
+    product?: { id: number; name: string; barcode: string | null } | null;
+  }>;
+}
+
+export function listSales(customerId?: number) {
+  const qs = customerId ? `?customer_id=${customerId}` : "";
+  return apiFetch<{ data: SaleRow[]; meta: { current_page: number; last_page: number; total: number } }>(`/sales${qs}`);
+}
+
+export function getSale(id: number) {
+  return apiFetch<{ data: SaleDetail }>(`/sales/${id}`);
+}
+
+export function recordCustomerRepayment(customerId: number, amount: number, note?: string) {
+  return apiFetch<{ data: LedgerEntry; customer: CustomerRow }>(`/customers/${customerId}/repayments`, {
+    method: "POST",
+    body: JSON.stringify({ amount, note }),
+  });
+}
+
+export interface VendorPaymentRow {
+  id: number;
+  amount: string | number;
+  note: string | null;
+  created_at: string;
+  purchase?: { id: number; grn_no: string } | null;
+}
+
+export function getVendorDetail(id: number) {
+  return apiFetch<{ vendor: VendorRow; purchases: PurchaseRow[]; payments: VendorPaymentRow[] }>(`/vendors/${id}`);
 }
 
 export function listPurchases() {

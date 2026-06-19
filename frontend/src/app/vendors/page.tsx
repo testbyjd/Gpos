@@ -7,12 +7,14 @@ import { SearchInput } from "@/components/ui/search-input";
 import { formatMoney } from "@/lib/utils";
 import { listVendors, type VendorRow } from "@/lib/admin-api";
 import { VendorFormModal } from "@/features/admin/components/AdminActionModals";
+import { VendorDetailDrawer } from "@/features/admin/components/DetailDrawers";
 import { AdminShell, DataTable, PagePanel, PanelHeader, StatusPill } from "@/features/admin/components/AdminShell";
 
 export default function VendorsPage() {
   const [vendors, setVendors] = useState<VendorRow[]>([]);
   const [search, setSearch] = useState("");
   const [showAdd, setShowAdd] = useState(false);
+  const [selected, setSelected] = useState<VendorRow | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -40,6 +42,7 @@ export default function VendorsPage() {
           <PanelHeader title="Vendor directory" meta={`${filtered.length} of ${vendors.length} vendors`} actions={<SearchInput label="Search vendor or phone" value={search} onChange={(e) => setSearch(e.target.value)} className="w-64" containerClassName="hidden sm:block" />} />
           <DataTable
             columns={["Vendor", "Phone", "Balance", "State"]}
+            onRowClick={(i) => setSelected(filtered[i])}
             rows={filtered.map((vendor) => [
               <span key="name" className="font-bold text-foreground">{vendor.name}</span>,
               vendor.phone ?? "—",
@@ -65,6 +68,8 @@ export default function VendorsPage() {
           }}
         />
       )}
+
+      {selected && <VendorDetailDrawer vendor={selected} onClose={() => setSelected(null)} />}
     </AdminShell>
   );
 }
