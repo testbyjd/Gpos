@@ -18,4 +18,5 @@ Route::middleware(['auth:sanctum', 'role:owner,manager'])->group(function () {
     });
 
     Route::get('/payables', [PayableController::class, 'index']);
+    Route::post('/payables/payments', [PayableController::class, 'recordPayment']);
 });

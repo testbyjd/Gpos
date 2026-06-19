@@ -91,12 +91,26 @@ export function deleteProduct(id: number) {
   );
 }
 
+export function listCustomers() {
+  return apiFetch<{ data: CustomerRow[] }>("/customers");
+}
+
+export function createCustomer(data: { name: string; phone?: string | null; code?: string | null }) {
+  return apiFetch<{ data: CustomerRow }>("/customers", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
 export function listVendors() {
   return apiFetch<{ data: VendorRow[] }>("/vendors");
 }
 
-export function listCustomers() {
-  return apiFetch<{ data: CustomerRow[] }>("/customers");
+export function createVendor(data: { name: string; phone?: string | null; address?: string | null }) {
+  return apiFetch<{ data: VendorRow }>("/vendors", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 }
 
 export function getCustomerLedger(id: number) {
@@ -109,6 +123,13 @@ export function listPurchases() {
 
 export function getPayables() {
   return apiFetch<{ total_payable: number; vendors: VendorRow[]; open_invoices: PurchaseRow[] }>("/payables");
+}
+
+export function recordVendorPayment(purchaseId: number, amount: number, note?: string) {
+  return apiFetch<{ ok: boolean; message: string; purchase: PurchaseRow }>("/payables/payments", {
+    method: "POST",
+    body: JSON.stringify({ purchase_id: purchaseId, amount, note }),
+  });
 }
 
 export function getDashboard() {
@@ -147,5 +168,18 @@ export function updateUserPassword(id: number, password: string) {
   return apiFetch<{ ok: boolean; message: string }>(`/users/${id}/password`, {
     method: "PATCH",
     body: JSON.stringify({ password }),
+  });
+}
+
+export function createUser(data: {
+  name: string;
+  email: string;
+  password: string;
+  role: "owner" | "manager" | "cashier";
+  pin?: string;
+}) {
+  return apiFetch<{ data: { id: number; name: string; email: string; role: string } }>("/users", {
+    method: "POST",
+    body: JSON.stringify(data),
   });
 }

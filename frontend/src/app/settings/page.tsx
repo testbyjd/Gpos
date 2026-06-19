@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
 import { FilterChips } from "@/components/ui/filter-chips";
 import { getUsersSettings, updateUserPassword } from "@/lib/admin-api";
+import { UserFormModal } from "@/features/admin/components/AdminActionModals";
 import { useModalDismiss } from "@/lib/hooks/useModalDismiss";
 import {
   AdminShell,
@@ -132,13 +133,14 @@ export default function SettingsPage() {
   const [data, setData] = useState<SettingsData | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [resetUser, setResetUser] = useState<UserRow | null>(null);
+  const [showAddUser, setShowAddUser] = useState(false);
+
+  function loadUsers() {
+    getUsersSettings().then(setData).catch(() => setData(null));
+  }
 
   useEffect(() => {
-    let alive = true;
-    getUsersSettings().then((res) => alive && setData(res)).catch(() => alive && setData(null));
-    return () => {
-      alive = false;
-    };
+    loadUsers();
   }, []);
 
   const filteredUsers = useMemo(() => {
@@ -153,7 +155,7 @@ export default function SettingsPage() {
   const userCount = data?.data.length ?? 0;
 
   return (
-    <AdminShell title="Settings" eyebrow="Store, roles and hardware" allowedRoles={["owner"]} actions={<Button size="sm"><UserPlus className="h-4 w-4" />User</Button>}>
+    <AdminShell title="Settings" eyebrow="Store, roles and hardware" allowedRoles={["owner"]} actions={<Button size="sm" onClick={() => setShowAddUser(true)}><UserPlus className="h-4 w-4" />User</Button>}>
       {notice && (
         <div className="mb-4 rounded-lg border border-border/80 bg-muted/60 px-4 py-3 text-sm font-semibold text-foreground">
           {notice}
@@ -254,6 +256,16 @@ export default function SettingsPage() {
           user={resetUser}
           onClose={() => setResetUser(null)}
           onSaved={setNotice}
+        />
+      )}
+
+      {showAddUser && (
+        <UserFormModal
+          onClose={() => setShowAddUser(false)}
+          onSaved={(msg) => {
+            setNotice(msg);
+            loadUsers();
+          }}
         />
       )}
     </AdminShell>

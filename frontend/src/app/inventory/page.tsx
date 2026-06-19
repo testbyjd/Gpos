@@ -116,7 +116,7 @@ export default function InventoryPage() {
       eyebrow="Products, stock and costing"
       actions={
         <div className="hidden gap-2 sm:flex">
-          <Button variant="secondary" size="sm"><Upload className="h-4 w-4" />Import</Button>
+          <Button variant="secondary" size="sm" onClick={() => setNotice("CSV import agle update mein aayega.")}><Upload className="h-4 w-4" />Import</Button>
           <Button size="sm" onClick={() => setFormProduct("new")}><Plus className="h-4 w-4" />Product</Button>
         </div>
       }

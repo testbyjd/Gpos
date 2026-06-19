@@ -40,14 +40,38 @@ export default function ReportsPage() {
   );
   const totalTopSales = (data?.top_items ?? []).reduce((sum, item) => sum + item.amount, 0);
 
+  function exportCsv() {
+    if (!data) return;
+    const rows = [
+      ["Report", range],
+      ["Gross sales", data.gross_sales],
+      ["Gross profit", data.gross_profit],
+      ["Net receivable", data.net_receivable],
+      [],
+      ["Category", "Sales", "Cost", "Profit", "Margin %"],
+      ...data.profit_by_category.map((r) => [r.category, r.sales, r.cost, r.profit, r.margin]),
+      [],
+      ["Top item", "Qty", "Unit", "Amount"],
+      ...data.top_items.map((r) => [r.name, r.qty, r.unit, r.amount]),
+    ];
+    const csv = rows.map((row) => row.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `gpos-report-${range.toLowerCase().replace(/\s+/g, "-")}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <AdminShell
       title="Reports"
       eyebrow="Day-end, P&L and item performance"
       actions={
         <div className="hidden gap-2 sm:flex">
-          <Button variant="secondary" size="sm"><Printer className="h-4 w-4" />Print</Button>
-          <Button size="sm"><Download className="h-4 w-4" />Export</Button>
+          <Button variant="secondary" size="sm" onClick={() => window.print()}><Printer className="h-4 w-4" />Print</Button>
+          <Button size="sm" onClick={exportCsv} disabled={!data}><Download className="h-4 w-4" />Export</Button>
         </div>
       }
     >

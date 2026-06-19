@@ -7,6 +7,7 @@ import { SearchInput } from "@/components/ui/search-input";
 import { FilterChips } from "@/components/ui/filter-chips";
 import { formatMoney } from "@/lib/utils";
 import { getPayables, type PurchaseRow } from "@/lib/admin-api";
+import { VendorPaymentModal } from "@/features/admin/components/AdminActionModals";
 import { AdminShell, DataTable, PagePanel, PanelHeader, StatusPill } from "@/features/admin/components/AdminShell";
 
 const STATES = ["All", "Due", "Clear"] as const;
@@ -16,11 +17,15 @@ export default function PayablesPage() {
   const [data, setData] = useState<PayablesData | null>(null);
   const [search, setSearch] = useState("");
   const [state, setState] = useState<(typeof STATES)[number]>("All");
+  const [showPayment, setShowPayment] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  function loadPayables() {
+    getPayables().then(setData).catch(() => setData(null));
+  }
 
   useEffect(() => {
-    let alive = true;
-    getPayables().then((res) => alive && setData(res)).catch(() => alive && setData(null));
-    return () => { alive = false; };
+    loadPayables();
   }, []);
 
   const filtered = useMemo(() => {
@@ -35,7 +40,14 @@ export default function PayablesPage() {
   }, [data, search, state]);
 
   return (
-    <AdminShell title="Payables" eyebrow="Vendor balances and open GRNs" actions={<Button size="sm"><Plus className="h-4 w-4" />Payment</Button>}>
+    <AdminShell
+      title="Payables"
+      eyebrow="Vendor balances and open GRNs"
+      actions={<Button size="sm" onClick={() => setShowPayment(true)}><Plus className="h-4 w-4" />Payment</Button>}
+    >
+      {notice && (
+        <div className="mb-4 rounded-lg border border-border/80 bg-muted/60 px-4 py-3 text-sm font-semibold text-foreground">{notice}</div>
+      )}
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <PagePanel>
           <PanelHeader title="Open purchase invoices" meta={`${filtered.length} invoices`} />
@@ -62,6 +74,17 @@ export default function PayablesPage() {
           </div>
         </PagePanel>
       </div>
+
+      {showPayment && (
+        <VendorPaymentModal
+          invoices={data?.open_invoices ?? []}
+          onClose={() => setShowPayment(false)}
+          onSaved={(msg) => {
+            setNotice(msg);
+            loadPayables();
+          }}
+        />
+      )}
     </AdminShell>
   );
 }

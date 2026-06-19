@@ -7,6 +7,7 @@ import { SearchInput } from "@/components/ui/search-input";
 import { FilterChips } from "@/components/ui/filter-chips";
 import { formatMoney } from "@/lib/utils";
 import { listCustomers, type CustomerRow } from "@/lib/admin-api";
+import { CustomerFormModal } from "@/features/admin/components/AdminActionModals";
 import { AdminShell, DataTable, PagePanel, PanelHeader, StatusPill } from "@/features/admin/components/AdminShell";
 
 const STATES = ["All", "Due", "Clear"] as const;
@@ -15,6 +16,8 @@ export default function KhataPage() {
   const [customers, setCustomers] = useState<CustomerRow[]>([]);
   const [search, setSearch] = useState("");
   const [state, setState] = useState<(typeof STATES)[number]>("All");
+  const [showAdd, setShowAdd] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -34,7 +37,14 @@ export default function KhataPage() {
   const totalDue = customers.reduce((sum, c) => sum + Number(c.balance), 0);
 
   return (
-    <AdminShell title="Khata" eyebrow="Customer credit ledger" actions={<Button size="sm"><Plus className="h-4 w-4" />Customer</Button>}>
+    <AdminShell
+      title="Khata"
+      eyebrow="Customer credit ledger"
+      actions={<Button size="sm" onClick={() => setShowAdd(true)}><Plus className="h-4 w-4" />Customer</Button>}
+    >
+      {notice && (
+        <div className="mb-4 rounded-lg border border-border/80 bg-muted/60 px-4 py-3 text-sm font-semibold text-foreground">{notice}</div>
+      )}
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <PagePanel>
           <PanelHeader title="Customer balances" meta={`${filtered.length} of ${customers.length} customers`} />
@@ -60,6 +70,16 @@ export default function KhataPage() {
           </div>
         </PagePanel>
       </div>
+
+      {showAdd && (
+        <CustomerFormModal
+          onClose={() => setShowAdd(false)}
+          onSaved={(c) => {
+            setCustomers((prev) => [...prev, c].sort((a, b) => a.name.localeCompare(b.name)));
+            setNotice(`"${c.name}" add ho gaya.`);
+          }}
+        />
+      )}
     </AdminShell>
   );
 }

@@ -6,11 +6,14 @@ import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
 import { formatMoney } from "@/lib/utils";
 import { listVendors, type VendorRow } from "@/lib/admin-api";
+import { VendorFormModal } from "@/features/admin/components/AdminActionModals";
 import { AdminShell, DataTable, PagePanel, PanelHeader, StatusPill } from "@/features/admin/components/AdminShell";
 
 export default function VendorsPage() {
   const [vendors, setVendors] = useState<VendorRow[]>([]);
   const [search, setSearch] = useState("");
+  const [showAdd, setShowAdd] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -24,7 +27,14 @@ export default function VendorsPage() {
   }, [vendors, search]);
 
   return (
-    <AdminShell title="Vendors" eyebrow="Supplier directory" actions={<Button size="sm"><Plus className="h-4 w-4" />Vendor</Button>}>
+    <AdminShell
+      title="Vendors"
+      eyebrow="Supplier directory"
+      actions={<Button size="sm" onClick={() => setShowAdd(true)}><Plus className="h-4 w-4" />Vendor</Button>}
+    >
+      {notice && (
+        <div className="mb-4 rounded-lg border border-border/80 bg-muted/60 px-4 py-3 text-sm font-semibold text-foreground">{notice}</div>
+      )}
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <PagePanel>
           <PanelHeader title="Vendor directory" meta={`${filtered.length} of ${vendors.length} vendors`} actions={<SearchInput label="Search vendor or phone" value={search} onChange={(e) => setSearch(e.target.value)} className="w-64" containerClassName="hidden sm:block" />} />
@@ -45,6 +55,16 @@ export default function VendorsPage() {
           </div>
         </PagePanel>
       </div>
+
+      {showAdd && (
+        <VendorFormModal
+          onClose={() => setShowAdd(false)}
+          onSaved={(v) => {
+            setVendors((prev) => [...prev, v].sort((a, b) => a.name.localeCompare(b.name)));
+            setNotice(`"${v.name}" add ho gaya.`);
+          }}
+        />
+      )}
     </AdminShell>
   );
 }
