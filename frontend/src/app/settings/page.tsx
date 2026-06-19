@@ -7,6 +7,7 @@ import { SearchInput } from "@/components/ui/search-input";
 import { FilterChips } from "@/components/ui/filter-chips";
 import { getUsersSettings, updateUserPassword } from "@/lib/admin-api";
 import { UserFormModal } from "@/features/admin/components/AdminActionModals";
+import { ModalPortal } from "@/components/ui/modal-portal";
 import { useModalDismiss } from "@/lib/hooks/useModalDismiss";
 import {
   AdminShell,
@@ -59,11 +60,13 @@ function ResetPasswordModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-      <form
-        onSubmit={onSubmit}
-        className="w-full max-w-md rounded-xl border border-border/80 bg-card p-5 shadow-xl"
-      >
+    <ModalPortal>
+      <div className="fixed inset-0 z-[100] overflow-y-auto bg-black/50 p-4 py-8 backdrop-blur-sm">
+        <div className="flex min-h-full items-center justify-center">
+          <form
+            onSubmit={onSubmit}
+            className="w-full max-w-md rounded-xl border border-border/80 bg-card p-5 shadow-xl"
+          >
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <h3 className="text-lg font-black text-foreground">Reset password</h3>
@@ -123,7 +126,9 @@ function ResetPasswordModal({
           </Button>
         </div>
       </form>
-    </div>
+        </div>
+      </div>
+    </ModalPortal>
   );
 }
 

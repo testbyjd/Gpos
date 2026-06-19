@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Barcode, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ModalPortal } from "@/components/ui/modal-portal";
 import { useModalDismiss } from "@/lib/hooks/useModalDismiss";
 import {
   createProduct,
@@ -91,11 +92,13 @@ export function ProductFormModal({ product, categories, onClose, onSaved }: Prop
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-      <form
-        onSubmit={onSubmit}
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border/80 bg-card p-5 shadow-xl"
-      >
+    <ModalPortal>
+      <div className="fixed inset-0 z-[100] overflow-y-auto bg-black/50 p-4 py-8 backdrop-blur-sm">
+        <div className="flex min-h-full items-center justify-center">
+          <form
+            onSubmit={onSubmit}
+            className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border/80 bg-card p-5 shadow-xl"
+          >
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <h3 className="text-lg font-black text-foreground">
@@ -253,6 +256,8 @@ export function ProductFormModal({ product, categories, onClose, onSaved }: Prop
           </Button>
         </div>
       </form>
-    </div>
+        </div>
+      </div>
+    </ModalPortal>
   );
 }

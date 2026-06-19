@@ -3,6 +3,7 @@
 import { FormEvent, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ModalPortal } from "@/components/ui/modal-portal";
 import { useModalDismiss } from "@/lib/hooks/useModalDismiss";
 import {
   createCustomer,
@@ -261,20 +262,24 @@ function ModalShell({
   children: ReactNode;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-xl border border-border/80 bg-card p-5 shadow-xl">
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div>
-            <h3 className="text-lg font-black text-foreground">{title}</h3>
-            <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
+    <ModalPortal>
+      <div className="fixed inset-0 z-[100] overflow-y-auto bg-black/50 p-4 py-8 backdrop-blur-sm">
+        <div className="flex min-h-full items-center justify-center">
+          <div className="w-full max-w-md rounded-xl border border-border/80 bg-card p-5 shadow-xl">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-black text-foreground">{title}</h3>
+                <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
+              </div>
+              <button type="button" onClick={onClose} aria-label="Close" className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            {children}
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted">
-            <X className="h-4 w-4" />
-          </button>
         </div>
-        {children}
       </div>
-    </div>
+    </ModalPortal>
   );
 }
 
