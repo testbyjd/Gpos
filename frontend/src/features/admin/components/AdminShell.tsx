@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   LogOut,
   PackagePlus,
+  Receipt,
   ReceiptText,
   Settings,
   ShoppingCart,
@@ -39,6 +40,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/purchases", label: "Purchases", icon: PackagePlus },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/settings", label: "Settings", icon: Settings, roles: ["owner"] },
+  { href: "/receipt", label: "Receipt", icon: Receipt, roles: ["owner"] },
 ];
 
 interface AdminShellProps {

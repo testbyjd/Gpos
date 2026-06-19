@@ -183,3 +183,24 @@ body {
     transform: none;
   }
 }
+
+/* Print: only the receipt is sent to the thermal printer. */
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  .print-receipt,
+  .print-receipt * {
+    visibility: visible !important;
+  }
+  .print-receipt {
+    position: absolute;
+    left: 0;
+    top: 0;
+    margin: 0 !important;
+    box-shadow: none !important;
+  }
+  @page {
+    margin: 0;
+  }
+}

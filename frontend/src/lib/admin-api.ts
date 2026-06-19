@@ -218,6 +218,28 @@ export function getReports() {
   }>("/reports/summary");
 }
 
+export interface ReceiptSettings {
+  shop_name: string;
+  tagline: string;
+  address: string;
+  phone: string;
+  footer_note: string;
+  paper_width: "58" | "80";
+  show_cashier: boolean;
+  show_customer: boolean;
+}
+
+export function getReceiptSettings() {
+  return apiFetch<{ data: ReceiptSettings }>("/settings/receipt");
+}
+
+export function updateReceiptSettings(data: ReceiptSettings) {
+  return apiFetch<{ ok: boolean; message: string; data: ReceiptSettings }>("/settings/receipt", {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
 export function getUsersSettings() {
   return apiFetch<{
     data: Array<{ id: number; name: string; email: string; role: string; is_active: boolean; store_id: number | null }>;
