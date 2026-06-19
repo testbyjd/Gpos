@@ -2,6 +2,7 @@ import { apiFetch } from "./api";
 
 export interface ProductRow {
   id: number;
+  category_id: number | null;
   category: string | null;
   sku: string | null;
   barcode: string | null;
@@ -45,6 +46,42 @@ export interface PurchaseRow {
 
 export function listProducts() {
   return apiFetch<{ data: ProductRow[] }>("/inventory/products?per_page=500");
+}
+
+export interface CategoryRow {
+  id: number;
+  name: string;
+}
+
+export interface ProductInput {
+  name: string;
+  barcode?: string | null;
+  sku?: string | null;
+  category_id?: number | null;
+  unit: string;
+  sell_price: number;
+  avg_cost?: number;
+  stock_qty?: number;
+  low_stock_threshold?: number;
+  expiry_date?: string | null;
+}
+
+export function listCategories() {
+  return apiFetch<{ data: CategoryRow[] }>("/inventory/categories");
+}
+
+export function createProduct(data: ProductInput) {
+  return apiFetch<{ data: ProductRow }>("/inventory/products", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateProduct(id: number, data: Partial<ProductInput>) {
+  return apiFetch<{ data: ProductRow }>(`/inventory/products/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
 }
 
 export function deleteProduct(id: number) {

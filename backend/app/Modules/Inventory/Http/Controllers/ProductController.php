@@ -83,7 +83,7 @@ class ProductController extends Controller
     {
         $required = $partial ? 'sometimes' : 'required';
 
-        return $request->validate([
+        $data = $request->validate([
             'store_id' => ['nullable', 'integer', 'exists:stores,id'],
             'category_id' => ['nullable', 'integer', 'exists:categories,id'],
             'sku' => ['nullable', 'string', 'max:80'],
@@ -99,5 +99,14 @@ class ProductController extends Controller
             'expiry_date' => ['nullable', 'date'],
             'is_active' => ['nullable', 'boolean'],
         ]);
+
+        if (array_key_exists('barcode', $data)) {
+            $data['barcode'] = trim((string) $data['barcode']) ?: null;
+        }
+        if (array_key_exists('sku', $data)) {
+            $data['sku'] = trim((string) ($data['sku'] ?? '')) ?: null;
+        }
+
+        return $data;
     }
 }

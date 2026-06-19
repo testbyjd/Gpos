@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CalendarClock, Download, Plus, Trash2, Upload } from "lucide-react";
+import { CalendarClock, Download, Pencil, Plus, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
 import { FilterChips } from "@/components/ui/filter-chips";
 import { StatCard } from "@/components/ui/stat-card";
 import { formatMoney } from "@/lib/utils";
-import { deleteProduct, listProducts, type ProductRow } from "@/lib/admin-api";
+import { deleteProduct, listCategories, listProducts, type CategoryRow, type ProductRow } from "@/lib/admin-api";
+import { ProductFormModal } from "@/features/admin/components/ProductFormModal";
 import {
   AdminShell,
   DataTable,
@@ -40,6 +41,8 @@ export default function InventoryPage() {
   const [category, setCategory] = useState("All");
   const [notice, setNotice] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [categories, setCategories] = useState<CategoryRow[]>([]);
+  const [formProduct, setFormProduct] = useState<ProductRow | null | "new">(null);
 
   const loadProducts = useCallback(() => {
     listProducts()
@@ -49,7 +52,20 @@ export default function InventoryPage() {
 
   useEffect(() => {
     loadProducts();
+    listCategories()
+      .then((res) => setCategories(res.data))
+      .catch(() => setCategories([]));
   }, [loadProducts]);
+
+  function handleSaved(product: ProductRow) {
+    setProducts((prev) => {
+      const idx = prev.findIndex((p) => p.id === product.id);
+      if (idx === -1) return [...prev, product].sort((a, b) => a.name.localeCompare(b.name));
+      return prev.map((p) => (p.id === product.id ? product : p));
+    });
+    setNotice(formProduct === "new" ? `"${product.name}" add ho gaya.` : `"${product.name}" update ho gaya.`);
+    setFormProduct(null);
+  }
 
   async function handleDelete(product: ProductRow) {
     const usedHint = "Agar ye product kahin use ho chuka hai to sirf inactive hoga.";
@@ -68,7 +84,7 @@ export default function InventoryPage() {
     }
   }
 
-  const categories = useMemo(() => ["All", ...Array.from(new Set(products.map((p) => p.category ?? "Uncategorized")))], [products]);
+  const filterCategories = useMemo(() => ["All", ...Array.from(new Set(products.map((p) => p.category ?? "Uncategorized")))], [products]);
   const expiringSoon = useMemo(
     () => products.filter((p) => {
       const days = daysUntil(p.expiry_date);
@@ -98,7 +114,12 @@ export default function InventoryPage() {
     <AdminShell
       title="Inventory"
       eyebrow="Products, stock and costing"
-      actions={<div className="hidden gap-2 sm:flex"><Button variant="secondary" size="sm"><Upload className="h-4 w-4" />Import</Button><Button size="sm"><Plus className="h-4 w-4" />Product</Button></div>}
+      actions={
+        <div className="hidden gap-2 sm:flex">
+          <Button variant="secondary" size="sm"><Upload className="h-4 w-4" />Import</Button>
+          <Button size="sm" onClick={() => setFormProduct("new")}><Plus className="h-4 w-4" />Product</Button>
+        </div>
+      }
     >
       {notice && (
         <div className="mb-4 rounded-lg border border-border/80 bg-muted/60 px-4 py-3 text-sm font-semibold text-foreground">
@@ -111,7 +132,12 @@ export default function InventoryPage() {
           <div className="flex flex-wrap items-center gap-2 border-b border-border/80 px-4 py-3">
             <SearchInput label="Search SKU, barcode, product" value={search} onChange={(e) => setSearch(e.target.value)} className="w-full sm:w-60" containerClassName="w-full sm:w-auto" />
             <FilterChips options={STATES} value={state} onChange={setState} aria-label="Filter by stock or expiry" />
-            <div className="ml-auto"><FilterChips options={categories} value={category} onChange={setCategory} aria-label="Filter by category" /></div>
+            <div className="ml-auto"><FilterChips options={filterCategories} value={category} onChange={setCategory} aria-label="Filter by category" /></div>
+          </div>
+          <div className="flex gap-2 border-b border-border/80 px-4 pb-3 sm:hidden">
+            <Button className="flex-1" size="sm" onClick={() => setFormProduct("new")}>
+              <Plus className="h-4 w-4" />Add product
+            </Button>
           </div>
           <DataTable
             columns={["Product", "SKU", "Category", "Stock", "Avg cost", "Price", "Expiry", "State", ""]}
@@ -127,16 +153,25 @@ export default function InventoryPage() {
                 <span key="price" className="font-bold tabular-nums text-primary">{formatMoney(Number(p.sell_price))}</span>,
                 <span key="expiry">{expiryPill(p.expiry_date)}</span>,
                 <StatusPill key="state" tone={isLow ? "warn" : "good"}>{isLow ? "Low" : "OK"}</StatusPill>,
-                <button
-                  key="delete"
-                  type="button"
-                  onClick={() => handleDelete(p)}
-                  disabled={deletingId === p.id}
-                  aria-label={`Delete ${p.name}`}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-50"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>,
+                <div key="actions" className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setFormProduct(p)}
+                    aria-label={`Edit ${p.name}`}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(p)}
+                    disabled={deletingId === p.id}
+                    aria-label={`Delete ${p.name}`}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-50"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>,
               ];
             })}
           />
@@ -162,6 +197,15 @@ export default function InventoryPage() {
           <PagePanel className="p-4"><Button className="w-full"><Download className="h-4 w-4" />Export stock sheet</Button></PagePanel>
         </div>
       </div>
+
+      {formProduct !== null && (
+        <ProductFormModal
+          product={formProduct === "new" ? null : formProduct}
+          categories={categories}
+          onClose={() => setFormProduct(null)}
+          onSaved={handleSaved}
+        />
+      )}
     </AdminShell>
   );
 }
