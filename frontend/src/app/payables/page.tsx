@@ -89,7 +89,16 @@ export default function PayablesPage() {
         />
       )}
 
-      {selected && <PurchaseDetailModal purchase={selected} onClose={() => setSelected(null)} />}
+      {selected && (
+        <PurchaseDetailModal
+          purchase={selected}
+          onClose={() => setSelected(null)}
+          onReturned={() => {
+            setNotice("Vendor return record ho gaya.");
+            loadPayables();
+          }}
+        />
+      )}
     </AdminShell>
   );
 }

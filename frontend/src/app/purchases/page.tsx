@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, Plus, X } from "lucide-react";
+import { CalendarDays, Plus } from "lucide-react";
 import { SearchInput } from "@/components/ui/search-input";
 import { StatCard } from "@/components/ui/stat-card";
 import { formatMoney } from "@/lib/utils";
-import { useModalDismiss } from "@/lib/hooks/useModalDismiss";
 import { listPurchases, type PurchaseRow } from "@/lib/admin-api";
+import { PurchaseDetailModal } from "@/features/admin/components/DetailDrawers";
 import { AdminShell, DataTable, PagePanel, PanelHeader, StatusPill } from "@/features/admin/components/AdminShell";
 
 function stateTone(balance: number) {
@@ -19,9 +19,13 @@ export default function PurchasesPage() {
   const [selected, setSelected] = useState<PurchaseRow | null>(null);
   const [search, setSearch] = useState("");
 
+  function load() {
+    return listPurchases().then((res) => setPurchases(res.data));
+  }
+
   useEffect(() => {
     let alive = true;
-    listPurchases().then((res) => alive && setPurchases(res.data)).catch(() => alive && setPurchases([]));
+    load().catch(() => alive && setPurchases([]));
     return () => { alive = false; };
   }, []);
 
@@ -69,29 +73,13 @@ export default function PurchasesPage() {
         </div>
       </div>
 
-      {selected && <PurchaseModal purchase={selected} onClose={() => setSelected(null)} />}
+      {selected && (
+        <PurchaseDetailModal
+          purchase={selected}
+          onClose={() => setSelected(null)}
+          onReturned={() => load()}
+        />
+      )}
     </AdminShell>
-  );
-}
-
-function PurchaseModal({ purchase, onClose }: { purchase: PurchaseRow; onClose: () => void }) {
-  useModalDismiss(onClose);
-  const balance = Number(purchase.balance_amount);
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" onClick={onClose}>
-      <section className="max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-lg border border-border bg-surface shadow-2xl" onClick={(event) => event.stopPropagation()}>
-        <div className="flex items-start justify-between gap-4 border-b border-border/80 px-5 py-4">
-          <div><StatusPill tone={stateTone(balance)}>{balance > 0 ? "Partial" : "Paid"}</StatusPill><h2 className="mt-2 text-xl font-black text-foreground">{purchase.grn_no} · {purchase.vendor?.name ?? "Vendor"}</h2><p className="mt-1 text-sm text-muted-foreground">{new Date(purchase.received_at).toLocaleString("en-PK")}</p></div>
-          <button onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-card-hover hover:text-foreground" aria-label="Close purchase details"><X className="h-5 w-5" /></button>
-        </div>
-        <div className="max-h-[calc(90vh-5rem)] overflow-y-auto p-5">
-          <div className="grid gap-3 sm:grid-cols-3">
-            {[["Total", purchase.subtotal], ["Paid", purchase.paid_amount], ["Balance", purchase.balance_amount]].map(([label, value]) => <div key={label} className="rounded-lg border border-border/80 bg-card p-3"><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{label}</p><p className="mt-2 text-xl font-black tabular-nums text-foreground">{formatMoney(Number(value))}</p></div>)}
-          </div>
-          <div className="mt-4"><DataTable columns={["Product", "Qty", "Unit cost", "Line total"]} rows={purchase.lines.map((line) => [line.product?.name ?? "Product", Number(line.qty), formatMoney(Number(line.unit_cost)), formatMoney(Number(line.qty) * Number(line.unit_cost))])} /></div>
-        </div>
-      </section>
-    </div>
   );
 }

@@ -8,6 +8,8 @@ import { useModalDismiss } from "@/lib/hooks/useModalDismiss";
 import { formatMoney } from "@/lib/utils";
 import { DataTable, StatusPill } from "@/features/admin/components/AdminShell";
 import {
+  createPurchaseReturn,
+  createSaleReturn,
   getCustomerLedger,
   getSale,
   getVendorDetail,
@@ -16,6 +18,7 @@ import {
   type CustomerRow,
   type LedgerEntry,
   type PurchaseRow,
+  type PurchaseReturnRow,
   type SaleDetail,
   type SaleRow,
   type VendorPaymentRow,
@@ -195,7 +198,9 @@ export function CustomerDetailDrawer({
           }}
         />
       )}
-      {openSaleId !== null && <SaleDetailModal saleId={openSaleId} onClose={() => setOpenSaleId(null)} />}
+      {openSaleId !== null && (
+        <SaleDetailModal saleId={openSaleId} onClose={() => setOpenSaleId(null)} onReturned={() => refresh()} />
+      )}
     </Drawer>
   );
 }
@@ -268,10 +273,19 @@ function RepaymentModal({
   );
 }
 
-export function SaleDetailModal({ saleId, onClose }: { saleId: number; onClose: () => void }) {
+export function SaleDetailModal({
+  saleId,
+  onClose,
+  onReturned,
+}: {
+  saleId: number;
+  onClose: () => void;
+  onReturned?: () => void;
+}) {
   useModalDismiss(onClose);
   const [sale, setSale] = useState<SaleDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showReturn, setShowReturn] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -295,9 +309,16 @@ export function SaleDetailModal({ saleId, onClose }: { saleId: number; onClose: 
                   {sale ? fmtDate(sale.sold_at) : ""}{sale?.cashier ? ` · ${sale.cashier.name}` : ""}
                 </p>
               </div>
-              <button type="button" onClick={onClose} aria-label="Close" className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted">
-                <X className="h-4 w-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                {sale && (
+                  <Button size="sm" variant="secondary" onClick={() => setShowReturn(true)}>
+                    Return / Refund
+                  </Button>
+                )}
+                <button type="button" onClick={onClose} aria-label="Close" className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
 
             {loading || !sale ? (
@@ -331,7 +352,140 @@ export function SaleDetailModal({ saleId, onClose }: { saleId: number; onClose: 
                 />
               </>
             )}
+
+            {showReturn && sale && (
+              <SaleReturnModal
+                sale={sale}
+                onClose={() => setShowReturn(false)}
+                onSaved={() => {
+                  setShowReturn(false);
+                  onReturned?.();
+                  onClose();
+                }}
+              />
+            )}
           </section>
+        </div>
+      </div>
+    </ModalPortal>
+  );
+}
+
+function SaleReturnModal({
+  sale,
+  onClose,
+  onSaved,
+}: {
+  sale: SaleDetail;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  useModalDismiss(onClose);
+  const [qtys, setQtys] = useState<Record<number, string>>({});
+  const [method, setMethod] = useState<"cash" | "khata">("cash");
+  const [note, setNote] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const hasCustomer = !!sale.customer_id;
+
+  const selectedLines = sale.lines
+    .map((l) => ({ line: l, qty: Number(qtys[l.id] ?? 0) }))
+    .filter((x) => x.qty > 0);
+  const refundTotal = selectedLines.reduce((sum, x) => sum + x.qty * Number(x.line.unit_price), 0);
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (selectedLines.length === 0) return setError("Kam se kam ek item ki qty likho.");
+    for (const x of selectedLines) {
+      if (x.qty > Number(x.line.qty)) return setError("Return qty original se zyada nahi ho sakti.");
+    }
+    if (method === "khata" && !hasCustomer) return setError("Khata refund ke liye customer wala bill chahiye.");
+    setSaving(true);
+    setError(null);
+    try {
+      await createSaleReturn({
+        sale_id: sale.id,
+        customer_id: sale.customer_id,
+        refund_method: method,
+        note: note.trim() || undefined,
+        lines: selectedLines.map((x) => ({
+          product_id: x.line.product?.id ?? 0,
+          qty: x.qty,
+          unit_price: Number(x.line.unit_price),
+        })),
+      });
+      onSaved();
+    } catch {
+      setError("Return fail. Dobara try karo.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <ModalPortal>
+      <div className="fixed inset-0 z-[120] overflow-y-auto bg-black/55 p-4 py-8 backdrop-blur-sm">
+        <div className="flex min-h-full items-center justify-center">
+          <form onSubmit={onSubmit} className="w-full max-w-lg rounded-xl border border-border/80 bg-card p-5 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-black text-foreground">Return / Refund — {sale.invoice_no}</h3>
+                <p className="mt-1 text-sm text-muted-foreground">Jo qty wapas aayi woh likho</p>
+              </div>
+              <button type="button" onClick={onClose} aria-label="Close" className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {sale.lines.map((l) => (
+                <div key={l.id} className="flex items-center gap-3 rounded-md border border-border/70 bg-background px-3 py-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-bold text-foreground">{l.product?.name ?? "Product"}</p>
+                    <p className="text-xs text-muted-foreground">Bika: {Number(l.qty)} · {formatMoney(Number(l.unit_price))}</p>
+                  </div>
+                  <input
+                    type="number"
+                    step="0.001"
+                    min="0"
+                    max={Number(l.qty)}
+                    value={qtys[l.id] ?? ""}
+                    onChange={(e) => setQtys((p) => ({ ...p, [l.id]: e.target.value }))}
+                    placeholder="0"
+                    className="h-9 w-20 rounded-md border border-border bg-input px-2 text-right text-sm font-semibold outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
+                  />
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-muted-foreground">Refund kaise</span>
+                <select value={method} onChange={(e) => setMethod(e.target.value as "cash" | "khata")} className="h-10 w-full rounded-md border border-border bg-input px-3 text-sm font-semibold outline-none focus:border-primary focus:ring-2 focus:ring-ring/25">
+                  <option value="cash">Cash wapas</option>
+                  <option value="khata" disabled={!hasCustomer}>Khata adjust{hasCustomer ? "" : " (no customer)"}</option>
+                </select>
+              </label>
+              <div className="flex items-end">
+                <div className="w-full rounded-md border border-border/70 bg-background px-3 py-2">
+                  <p className="text-xs text-muted-foreground">Refund total</p>
+                  <p className="text-lg font-black tabular-nums text-foreground">{formatMoney(refundTotal)}</p>
+                </div>
+              </div>
+            </div>
+
+            <label className="mt-3 block">
+              <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-muted-foreground">Note (optional)</span>
+              <input value={note} onChange={(e) => setNote(e.target.value)} className="h-10 w-full rounded-md border border-border bg-input px-3 text-sm font-semibold outline-none focus:border-primary focus:ring-2 focus:ring-ring/25" />
+            </label>
+
+            {error && <p className="mt-3 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm font-bold text-danger">{error}</p>}
+            <div className="mt-5 flex gap-2">
+              <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>Cancel</Button>
+              <Button type="submit" className="flex-1" disabled={saving}>{saving ? "Saving..." : "Return confirm"}</Button>
+            </div>
+          </form>
         </div>
       </div>
     </ModalPortal>
@@ -348,22 +502,28 @@ export function VendorDetailDrawer({
   const [balance, setBalance] = useState(Number(vendor.balance));
   const [purchases, setPurchases] = useState<PurchaseRow[]>([]);
   const [payments, setPayments] = useState<VendorPaymentRow[]>([]);
+  const [returns, setReturns] = useState<PurchaseReturnRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [openPurchase, setOpenPurchase] = useState<PurchaseRow | null>(null);
 
+  function load() {
+    return getVendorDetail(vendor.id).then((res) => {
+      setBalance(Number(res.vendor.balance));
+      setPurchases(res.purchases);
+      setPayments(res.payments);
+      setReturns(res.returns ?? []);
+    });
+  }
+
   useEffect(() => {
     let alive = true;
-    getVendorDetail(vendor.id)
-      .then((res) => {
-        if (!alive) return;
-        setBalance(Number(res.vendor.balance));
-        setPurchases(res.purchases);
-        setPayments(res.payments);
-      })
+    load()
+      .catch(() => {})
       .finally(() => alive && setLoading(false));
     return () => {
       alive = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vendor.id]);
 
   const totalPaid = payments.reduce((sum, p) => sum + Number(p.amount), 0);
@@ -408,14 +568,44 @@ export function VendorDetailDrawer({
         />
       )}
 
-      {openPurchase && <PurchaseDetailModal purchase={openPurchase} onClose={() => setOpenPurchase(null)} />}
+      <SectionTitle>Return history</SectionTitle>
+      {loading ? null : (
+        <DataTable
+          minWidth="460px"
+          columns={["Date", "Return#", "Items", "Value"]}
+          emptyLabel="Koi return nahi."
+          rows={returns.map((r) => [
+            <span key="date" className="text-muted-foreground">{fmtDate(r.returned_at)}</span>,
+            <span key="no" className="font-bold text-foreground">{r.return_no}</span>,
+            r.lines.map((l) => l.product?.name).filter(Boolean).join(", ") || `${r.lines.length} items`,
+            <span key="val" className="font-bold tabular-nums text-warning">{formatMoney(Number(r.subtotal))}</span>,
+          ])}
+        />
+      )}
+
+      {openPurchase && (
+        <PurchaseDetailModal
+          purchase={openPurchase}
+          onClose={() => setOpenPurchase(null)}
+          onReturned={() => load()}
+        />
+      )}
     </Drawer>
   );
 }
 
-export function PurchaseDetailModal({ purchase, onClose }: { purchase: PurchaseRow; onClose: () => void }) {
+export function PurchaseDetailModal({
+  purchase,
+  onClose,
+  onReturned,
+}: {
+  purchase: PurchaseRow;
+  onClose: () => void;
+  onReturned?: () => void;
+}) {
   useModalDismiss(onClose);
   const balance = Number(purchase.balance_amount);
+  const [showReturn, setShowReturn] = useState(false);
 
   return (
     <ModalPortal>
@@ -428,9 +618,14 @@ export function PurchaseDetailModal({ purchase, onClose }: { purchase: PurchaseR
                 <h3 className="mt-2 text-lg font-black text-foreground">{purchase.grn_no} · {purchase.vendor?.name ?? "Vendor"}</h3>
                 <p className="mt-1 text-sm text-muted-foreground">{new Date(purchase.received_at).toLocaleString("en-PK")}</p>
               </div>
-              <button type="button" onClick={onClose} aria-label="Close" className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted">
-                <X className="h-4 w-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="secondary" onClick={() => setShowReturn(true)}>
+                  Return to vendor
+                </Button>
+                <button type="button" onClick={onClose} aria-label="Close" className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
             <div className="grid grid-cols-3 gap-3">
               <SummaryCard label="Total" value={formatMoney(Number(purchase.subtotal))} />
@@ -449,7 +644,125 @@ export function PurchaseDetailModal({ purchase, onClose }: { purchase: PurchaseR
                 ])}
               />
             </div>
+
+            {showReturn && (
+              <PurchaseReturnModal
+                purchase={purchase}
+                onClose={() => setShowReturn(false)}
+                onSaved={() => {
+                  setShowReturn(false);
+                  onReturned?.();
+                  onClose();
+                }}
+              />
+            )}
           </section>
+        </div>
+      </div>
+    </ModalPortal>
+  );
+}
+
+function PurchaseReturnModal({
+  purchase,
+  onClose,
+  onSaved,
+}: {
+  purchase: PurchaseRow;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  useModalDismiss(onClose);
+  const [qtys, setQtys] = useState<Record<number, string>>({});
+  const [note, setNote] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const selectedLines = purchase.lines
+    .map((l) => ({ line: l, qty: Number(qtys[l.id] ?? 0) }))
+    .filter((x) => x.qty > 0);
+  const returnTotal = selectedLines.reduce((sum, x) => sum + x.qty * Number(x.line.unit_cost), 0);
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (selectedLines.length === 0) return setError("Kam se kam ek item ki qty likho.");
+    for (const x of selectedLines) {
+      if (x.qty > Number(x.line.qty)) return setError("Return qty original se zyada nahi ho sakti.");
+      if (!x.line.product?.id) return setError("Product missing — return nahi ho sakta.");
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await createPurchaseReturn({
+        vendor_id: purchase.vendor?.id ?? 0,
+        purchase_id: purchase.id,
+        note: note.trim() || undefined,
+        lines: selectedLines.map((x) => ({
+          product_id: x.line.product!.id,
+          qty: x.qty,
+          unit_cost: Number(x.line.unit_cost),
+        })),
+      });
+      onSaved();
+    } catch {
+      setError("Return fail. Dobara try karo.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <ModalPortal>
+      <div className="fixed inset-0 z-[120] overflow-y-auto bg-black/55 p-4 py-8 backdrop-blur-sm">
+        <div className="flex min-h-full items-center justify-center">
+          <form onSubmit={onSubmit} className="w-full max-w-lg rounded-xl border border-border/80 bg-card p-5 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-black text-foreground">Return to vendor — {purchase.grn_no}</h3>
+                <p className="mt-1 text-sm text-muted-foreground">Jo maal wapas bheja woh qty likho</p>
+              </div>
+              <button type="button" onClick={onClose} aria-label="Close" className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {purchase.lines.map((l) => (
+                <div key={l.id} className="flex items-center gap-3 rounded-md border border-border/70 bg-background px-3 py-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-bold text-foreground">{l.product?.name ?? "Product"}</p>
+                    <p className="text-xs text-muted-foreground">Aaya: {Number(l.qty)} · {formatMoney(Number(l.unit_cost))}</p>
+                  </div>
+                  <input
+                    type="number"
+                    step="0.001"
+                    min="0"
+                    max={Number(l.qty)}
+                    value={qtys[l.id] ?? ""}
+                    onChange={(e) => setQtys((p) => ({ ...p, [l.id]: e.target.value }))}
+                    placeholder="0"
+                    className="h-9 w-20 rounded-md border border-border bg-input px-2 text-right text-sm font-semibold outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
+                  />
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4 rounded-md border border-border/70 bg-background px-3 py-2">
+              <p className="text-xs text-muted-foreground">Return total (payable se minus hoga)</p>
+              <p className="text-lg font-black tabular-nums text-foreground">{formatMoney(returnTotal)}</p>
+            </div>
+
+            <label className="mt-3 block">
+              <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-muted-foreground">Note (optional)</span>
+              <input value={note} onChange={(e) => setNote(e.target.value)} className="h-10 w-full rounded-md border border-border bg-input px-3 text-sm font-semibold outline-none focus:border-primary focus:ring-2 focus:ring-ring/25" />
+            </label>
+
+            {error && <p className="mt-3 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm font-bold text-danger">{error}</p>}
+            <div className="mt-5 flex gap-2">
+              <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>Cancel</Button>
+              <Button type="submit" className="flex-1" disabled={saving}>{saving ? "Saving..." : "Return confirm"}</Button>
+            </div>
+          </form>
         </div>
       </div>
     </ModalPortal>

@@ -179,8 +179,51 @@ export interface VendorPaymentRow {
   purchase?: { id: number; grn_no: string } | null;
 }
 
+export interface PurchaseReturnRow {
+  id: number;
+  return_no: string;
+  subtotal: string | number;
+  note: string | null;
+  returned_at: string;
+  lines: Array<{ id: number; qty: string | number; unit_cost: string | number; product?: { id: number; name: string } | null }>;
+}
+
 export function getVendorDetail(id: number) {
-  return apiFetch<{ vendor: VendorRow; purchases: PurchaseRow[]; payments: VendorPaymentRow[] }>(`/vendors/${id}`);
+  return apiFetch<{ vendor: VendorRow; purchases: PurchaseRow[]; payments: VendorPaymentRow[]; returns: PurchaseReturnRow[] }>(`/vendors/${id}`);
+}
+
+export function createPurchaseReturn(data: {
+  vendor_id: number;
+  purchase_id?: number;
+  note?: string;
+  lines: Array<{ product_id: number; qty: number; unit_cost: number }>;
+}) {
+  return apiFetch<{ data: PurchaseReturnRow }>("/purchase-returns", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export interface SaleReturnRow {
+  id: number;
+  return_no: string;
+  total: string | number;
+  refund_method: string;
+  note: string | null;
+  returned_at: string;
+}
+
+export function createSaleReturn(data: {
+  sale_id?: number;
+  customer_id?: number | null;
+  refund_method: "cash" | "khata";
+  note?: string;
+  lines: Array<{ product_id: number; qty: number; unit_price: number }>;
+}) {
+  return apiFetch<{ data: SaleReturnRow }>("/sale-returns", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 }
 
 export function listPurchases() {

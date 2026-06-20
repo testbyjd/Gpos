@@ -46,6 +46,10 @@ class VendorController extends Controller
                 ->with('purchase:id,grn_no')
                 ->latest()
                 ->get(),
+            'returns' => $vendor->returns()
+                ->with('lines.product:id,name,barcode')
+                ->latest('returned_at')
+                ->get(),
         ]);
     }
 }

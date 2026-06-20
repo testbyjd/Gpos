@@ -30,4 +30,39 @@ class StockService
             'user_id' => $userId,
         ]);
     }
+
+    /**
+     * Apply a stock change (positive to add, negative to remove) and log a movement.
+     * Used by returns and manual adjustments.
+     */
+    public function record(
+        int $productId,
+        float $qtyDelta,
+        string $type,
+        string $referenceType,
+        int $referenceId,
+        ?int $userId,
+        ?string $note = null,
+    ): void {
+        $product = Product::lockForUpdate()->findOrFail($productId);
+
+        if ($qtyDelta < 0 && (float) $product->stock_qty < abs($qtyDelta)) {
+            throw new RuntimeException("Insufficient stock for product {$product->name}");
+        }
+
+        $product->stock_qty = bcadd((string) $product->stock_qty, (string) $qtyDelta, 3);
+        $product->save();
+
+        StockMovement::create([
+            'store_id' => $product->store_id,
+            'product_id' => $product->id,
+            'type' => $type,
+            'qty_delta' => $qtyDelta,
+            'qty_after' => $product->stock_qty,
+            'reference_type' => $referenceType,
+            'reference_id' => $referenceId,
+            'user_id' => $userId,
+            'note' => $note,
+        ]);
+    }
 }

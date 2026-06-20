@@ -26,4 +26,9 @@ class Vendor extends Model
     {
         return $this->hasMany(VendorPayment::class);
     }
+
+    public function returns(): HasMany
+    {
+        return $this->hasMany(PurchaseReturn::class);
+    }
 }

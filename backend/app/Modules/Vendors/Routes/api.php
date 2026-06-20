@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Vendors\Http\Controllers\PurchaseController;
+use App\Modules\Vendors\Http\Controllers\PurchaseReturnController;
 use App\Modules\Vendors\Http\Controllers\PayableController;
 use App\Modules\Vendors\Http\Controllers\VendorController;
 use Illuminate\Support\Facades\Route;
@@ -16,6 +17,12 @@ Route::middleware(['auth:sanctum', 'role:owner,manager'])->group(function () {
     Route::prefix('purchases')->group(function () {
         Route::get('/', [PurchaseController::class, 'index']);
         Route::post('/', [PurchaseController::class, 'store']);
+    });
+
+    Route::prefix('purchase-returns')->group(function () {
+        Route::get('/', [PurchaseReturnController::class, 'index']);
+        Route::post('/', [PurchaseReturnController::class, 'store']);
+        Route::get('/{purchaseReturn}', [PurchaseReturnController::class, 'show']);
     });
 
     Route::get('/payables', [PayableController::class, 'index']);
