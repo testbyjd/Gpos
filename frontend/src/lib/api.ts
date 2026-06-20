@@ -1,3 +1,5 @@
+import { logout } from "./auth";
+
 const DEFAULT_API_BASE = "http://localhost:8000/api/v1";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE;
@@ -67,8 +69,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   if (!res.ok) {
     const body = await res.text();
     if (res.status === 401 && typeof window !== "undefined") {
-      window.localStorage.removeItem("gpos.auth.token");
-      window.localStorage.removeItem("gpos.auth.user");
+      logout();
       if (!window.location.pathname.startsWith("/login")) {
         window.location.href = "/login?expired=1";
       }

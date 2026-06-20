@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   BarChart3,
   Boxes,
@@ -53,9 +53,9 @@ interface AdminShellProps {
 
 export function AdminShell({ title, eyebrow, actions, allowedRoles = ["owner", "manager"], children }: AdminShellProps) {
   const pathname = usePathname();
-  const router = useRouter();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [ready, setReady] = useState(false);
+  const rolesKey = allowedRoles.join(",");
   const allowed = user !== null && allowedRoles.includes(user.role);
   const roleLabel = user?.role === "manager" ? "Manager Console" : "Owner Console";
   const initials = (user?.name ?? "GT")
@@ -67,22 +67,22 @@ export function AdminShell({ title, eyebrow, actions, allowedRoles = ["owner", "
     .toUpperCase();
 
   useEffect(() => {
-    setUser(getStoredUser());
-    setReady(true);
-  }, []);
-
-  useEffect(() => {
-    if (!ready) return;
-    if (!user) {
-      router.replace("/login");
-    } else if (!allowed) {
-      router.replace(user.role === "cashier" ? "/" : "/dashboard");
+    const stored = getStoredUser();
+    if (!stored) {
+      window.location.replace("/login");
+      return;
     }
-  }, [ready, user, allowed, router]);
+    if (!allowedRoles.includes(stored.role)) {
+      window.location.replace(stored.role === "cashier" ? "/" : "/dashboard");
+      return;
+    }
+    setUser(stored);
+    setReady(true);
+  }, [rolesKey]);
 
   function signOut() {
     logout();
-    router.replace("/login");
+    window.location.replace("/login");
   }
 
   if (!ready || !allowed) {

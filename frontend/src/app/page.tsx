@@ -9,15 +9,14 @@ export default function Home() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    setUser(getStoredUser());
+    const stored = getStoredUser();
+    if (!stored) {
+      window.location.replace("/login");
+      return;
+    }
+    setUser(stored);
     setReady(true);
   }, []);
-
-  useEffect(() => {
-    if (ready && !user) {
-      window.location.replace("/login");
-    }
-  }, [ready, user]);
 
   if (!ready || !user) {
     return (

@@ -11,6 +11,12 @@ export interface AuthUser {
   store_id: number | null;
 }
 
+const VALID_ROLES: AuthUser["role"][] = ["owner", "manager", "cashier"];
+
+export function homePathForRole(role: AuthUser["role"]): string {
+  return role === "cashier" ? "/" : "/dashboard";
+}
+
 export async function login(email: string, password: string) {
   const data = await apiFetch<{ token: string; user: AuthUser }>("/auth/login", {
     method: "POST",
@@ -34,9 +40,14 @@ export function getStoredUser(): AuthUser | null {
   if (!raw) return null;
 
   try {
-    return JSON.parse(raw) as AuthUser;
+    const user = JSON.parse(raw) as AuthUser;
+    if (!user?.role || !VALID_ROLES.includes(user.role)) {
+      logout();
+      return null;
+    }
+    return user;
   } catch {
-    window.localStorage.removeItem(USER_KEY);
+    logout();
     return null;
   }
 }

@@ -1,14 +1,13 @@
 "use client";
 
 import { FormEvent, Suspense, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { LockKeyhole, Store } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
-import { getStoredUser, login } from "@/lib/auth";
+import { getStoredUser, homePathForRole, login, logout } from "@/lib/auth";
 import { getErrorMessage } from "@/lib/api";
 
 function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const sessionExpired = searchParams.get("expired") === "1";
   const [email, setEmail] = useState("");
@@ -18,12 +17,20 @@ function LoginForm() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    if (searchParams.get("expired") === "1") {
+      logout();
+      setReady(true);
+      return;
+    }
+
     const stored = getStoredUser();
     if (stored) {
-      router.replace(stored.role === "cashier" ? "/" : "/dashboard");
+      window.location.replace(homePathForRole(stored.role));
+      return;
     }
+
     setReady(true);
-  }, [router]);
+  }, [searchParams]);
 
   if (!ready) {
     return (
@@ -39,7 +46,7 @@ function LoginForm() {
     setLoading(true);
     try {
       const user = await login(email, password);
-      router.push(user.role === "cashier" ? "/" : "/dashboard");
+      window.location.replace(homePathForRole(user.role));
     } catch (err) {
       setError(getErrorMessage(err, "Login failed. Email/password ya server check karo."));
     } finally {
