@@ -7,6 +7,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 
 class UserController extends Controller
 {
@@ -63,6 +64,37 @@ class UserController extends Controller
         return response()->json([
             'ok' => true,
             'message' => "Password updated for {$user->name}.",
+        ]);
+    }
+
+    public function update(Request $request, User $user): JsonResponse
+    {
+        $data = $request->validate([
+            'name' => ['sometimes', 'required', 'string', 'max:160'],
+            'email' => ['sometimes', 'required', 'email', Rule::unique('users', 'email')->ignore($user->id)],
+            'role' => ['sometimes', 'required', 'in:owner,manager,cashier'],
+            'is_active' => ['sometimes', 'boolean'],
+            'pin' => ['nullable', 'digits_between:4,8'],
+        ]);
+
+        if (array_key_exists('is_active', $data) && $data['is_active'] === false && $request->user()?->id === $user->id) {
+            return response()->json(['message' => 'Apna khud ka account disable nahi kar sakte.'], 422);
+        }
+
+        $updates = collect($data)->except('pin')->all();
+
+        if (array_key_exists('pin', $data)) {
+            $updates['pin_hash'] = $data['pin'] !== null && $data['pin'] !== ''
+                ? Hash::make($data['pin'])
+                : null;
+        }
+
+        $user->update($updates);
+        $user->refresh();
+
+        return response()->json([
+            'data' => $user->only(['id', 'name', 'email', 'role', 'store_id', 'is_active', 'created_at']),
+            'message' => "{$user->name} update ho gaya.",
         ]);
     }
 }

@@ -326,3 +326,28 @@ export function createUser(data: {
     body: JSON.stringify(data),
   });
 }
+
+export interface UserSettingsRow {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  is_active: boolean;
+  store_id: number | null;
+}
+
+export function updateUser(
+  id: number,
+  data: {
+    name?: string;
+    email?: string;
+    role?: "owner" | "manager" | "cashier";
+    is_active?: boolean;
+    pin?: string;
+  },
+) {
+  return apiFetch<{ data: UserSettingsRow; message: string }>(`/users/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}

@@ -11,9 +11,11 @@ import {
   createUser,
   createVendor,
   recordVendorPayment,
+  updateUser,
   type CategoryRow,
   type CustomerRow,
   type PurchaseRow,
+  type UserSettingsRow,
   type VendorRow,
 } from "@/lib/admin-api";
 import { formatMoney } from "@/lib/utils";
@@ -117,62 +119,108 @@ export function VendorFormModal({
   );
 }
 
+const USER_ROLES = ["owner", "manager", "cashier"] as const;
+type UserRole = (typeof USER_ROLES)[number];
+
 export function UserFormModal({
+  user,
   onClose,
   onSaved,
 }: {
+  user?: UserSettingsRow | null;
   onClose: () => void;
   onSaved: (message: string) => void;
 }) {
   useModalDismiss(onClose);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const isEdit = user != null;
+  const [name, setName] = useState(user?.name ?? "");
+  const [email, setEmail] = useState(user?.email ?? "");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"manager" | "cashier">("cashier");
-  const [pin, setPin] = useState("1234");
+  const [role, setRole] = useState<UserRole>((user?.role as UserRole) ?? "cashier");
+  const [isActive, setIsActive] = useState(user?.is_active ?? true);
+  const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!name.trim() || !email.trim() || password.length < 6) {
-      return setError("Name, email aur password (6+ chars) zaroori hain.");
+    if (!name.trim() || !email.trim()) {
+      return setError("Name aur email zaroori hain.");
+    }
+    if (!isEdit && password.length < 6) {
+      return setError("Naye user ke liye password (6+ chars) zaroori hai.");
     }
     setSaving(true);
     setError(null);
     try {
-      const res = await createUser({
-        name: name.trim(),
-        email: email.trim(),
-        password,
-        role,
-        pin: pin.trim() || undefined,
-      });
-      onSaved(`${res.data.name} add ho gaya (${res.data.role}).`);
+      if (isEdit && user) {
+        const res = await updateUser(user.id, {
+          name: name.trim(),
+          email: email.trim(),
+          role,
+          is_active: isActive,
+          pin: pin.trim() || undefined,
+        });
+        onSaved(res.message);
+      } else {
+        const res = await createUser({
+          name: name.trim(),
+          email: email.trim(),
+          password,
+          role,
+          pin: pin.trim() || undefined,
+        });
+        onSaved(`${res.data.name} add ho gaya (${res.data.role}).`);
+      }
       onClose();
-    } catch {
-      setError("User add nahi hua — email pehle se ho sakti hai.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Save fail. Dobara try karo.");
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <ModalShell title="Add user" subtitle="Naya staff account (owner alag se hota hai)" onClose={onClose}>
+    <ModalShell
+      title={isEdit ? "Edit user" : "Add user"}
+      subtitle={isEdit ? "Name, role, active state update karo" : "Owner, manager ya cashier account"}
+      onClose={onClose}
+    >
       <form onSubmit={onSubmit} className="space-y-3">
         <Field label="Full name" value={name} onChange={setName} required />
         <Field label="Email" value={email} onChange={setEmail} type="email" required />
-        <Field label="Password" value={password} onChange={setPassword} type="password" required />
+        {!isEdit && (
+          <Field label="Password" value={password} onChange={setPassword} type="password" required />
+        )}
         <label className="block">
           <span className={labelCls}>Role</span>
-          <select value={role} onChange={(e) => setRole(e.target.value as "manager" | "cashier")} className={inputCls}>
-            <option value="cashier">Cashier</option>
-            <option value="manager">Manager</option>
+          <select value={role} onChange={(e) => setRole(e.target.value as UserRole)} className={inputCls}>
+            {USER_ROLES.map((r) => (
+              <option key={r} value={r}>
+                {r.charAt(0).toUpperCase() + r.slice(1)}
+              </option>
+            ))}
           </select>
         </label>
-        <Field label="PIN (optional)" value={pin} onChange={setPin} placeholder="1234" />
+        {isEdit && (
+          <label className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-primary"
+              checked={isActive}
+              onChange={(e) => setIsActive(e.target.checked)}
+            />
+            Account active
+          </label>
+        )}
+        <Field
+          label={isEdit ? "New PIN (optional, blank = no change)" : "PIN (optional)"}
+          value={pin}
+          onChange={setPin}
+          placeholder="1234"
+        />
         {error && <ErrorBox message={error} />}
-        <ModalActions onClose={onClose} saving={saving} submitLabel="Add user" />
+        <ModalActions onClose={onClose} saving={saving} submitLabel={isEdit ? "Save changes" : "Add user"} />
       </form>
     </ModalShell>
   );

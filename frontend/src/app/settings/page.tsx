@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { KeyRound, MonitorCog, ShieldCheck, Store, UserPlus, X } from "lucide-react";
+import { KeyRound, MonitorCog, Pencil, ShieldCheck, Store, UserPlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
 import { FilterChips } from "@/components/ui/filter-chips";
@@ -138,6 +138,7 @@ export default function SettingsPage() {
   const [data, setData] = useState<SettingsData | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [resetUser, setResetUser] = useState<UserRow | null>(null);
+  const [editUser, setEditUser] = useState<UserRow | null>(null);
   const [showAddUser, setShowAddUser] = useState(false);
 
   function loadUsers() {
@@ -170,7 +171,7 @@ export default function SettingsPage() {
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_390px]">
         <div className="grid gap-4">
           <PagePanel>
-            <PanelHeader title="Users and roles" meta={`${filteredUsers.length} of ${userCount} users · owner can reset any password`} />
+            <PanelHeader title="Users and roles" meta={`${filteredUsers.length} of ${userCount} users · owner edit / reset / add`} />
             <div className="flex flex-wrap items-center gap-2 border-b border-border/80 px-4 py-3">
               <SearchInput label="Search user or role" value={search} onChange={(e) => setSearch(e.target.value)} className="w-full sm:w-56" containerClassName="w-full sm:w-auto" />
               <div className="ml-auto">
@@ -184,15 +185,24 @@ export default function SettingsPage() {
                 user.email,
                 <StatusPill key="role" tone={user.role === "owner" ? "info" : user.role === "manager" ? "warn" : "neutral"}>{user.role}</StatusPill>,
                 <StatusPill key="state" tone={user.is_active ? "good" : "danger"}>{user.is_active ? "Active" : "Disabled"}</StatusPill>,
-                <button
-                  key="password"
-                  type="button"
-                  onClick={() => setResetUser(user)}
-                  aria-label={`Reset password for ${user.name}`}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
-                >
-                  <KeyRound className="h-4 w-4" />
-                </button>,
+                <div key="actions" className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setEditUser(user)}
+                    aria-label={`Edit ${user.name}`}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setResetUser(user)}
+                    aria-label={`Reset password for ${user.name}`}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+                  >
+                    <KeyRound className="h-4 w-4" />
+                  </button>
+                </div>,
               ])}
             />
           </PagePanel>
@@ -267,6 +277,17 @@ export default function SettingsPage() {
       {showAddUser && (
         <UserFormModal
           onClose={() => setShowAddUser(false)}
+          onSaved={(msg) => {
+            setNotice(msg);
+            loadUsers();
+          }}
+        />
+      )}
+
+      {editUser && (
+        <UserFormModal
+          user={editUser}
+          onClose={() => setEditUser(null)}
           onSaved={(msg) => {
             setNotice(msg);
             loadUsers();
