@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CalendarClock, PackageCheck, Sparkles, Tag, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn, formatMoney } from "@/lib/utils";
-import { useModalDismiss } from "@/lib/hooks/useModalDismiss";
 import type { UnitType } from "@/features/pos/types";
 import {
   PURCHASE_CATEGORIES,
@@ -42,8 +41,15 @@ interface Props {
 }
 
 export function ReceiveItemModal({ barcode, existing, onAdd, onClose }: Props) {
-  useModalDismiss(onClose);
   const isNew = !existing;
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
 
   const [qty, setQty] = useState("");
   const [cost, setCost] = useState(existing ? String(existing.lastCost) : "");
@@ -90,6 +96,7 @@ export function ReceiveItemModal({ barcode, existing, onAdd, onClose }: Props) {
       prevAvg: existing ? existing.avgCost : undefined,
       newAvg: existing ? avgPreview : undefined,
     });
+    onClose();
   }
 
   return (
@@ -98,7 +105,6 @@ export function ReceiveItemModal({ barcode, existing, onAdd, onClose }: Props) {
       role="dialog"
       aria-modal="true"
       aria-labelledby="receive-modal-title"
-      onClick={onClose}
     >
       <section
         className="animate-fade-in max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border bg-surface shadow-2xl"
@@ -126,8 +132,9 @@ export function ReceiveItemModal({ barcode, existing, onAdd, onClose }: Props) {
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            aria-label="Close"
+            aria-label="Cancel"
             className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-card-hover hover:text-foreground"
           >
             <X className="h-5 w-5" />

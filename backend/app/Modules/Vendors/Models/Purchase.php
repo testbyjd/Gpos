@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Purchase extends Model
 {
     protected $fillable = [
-        'store_id', 'vendor_id', 'grn_no', 'payment_terms', 'subtotal',
+        'client_id', 'store_id', 'vendor_id', 'grn_no', 'payment_terms', 'subtotal',
         'paid_amount', 'balance_amount', 'received_at', 'created_by',
     ];
 

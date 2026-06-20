@@ -27,7 +27,7 @@ interface Props {
 }
 
 export function PaymentModal({ total, payment, customer, onConfirm, onClose }: Props) {
-  useModalDismiss(onClose);
+  useModalDismiss(onClose, { escape: false });
 
   const isCash = payment === "cash";
   const [tendered, setTendered] = useState("");
@@ -84,7 +84,6 @@ export function PaymentModal({ total, payment, customer, onConfirm, onClose }: P
       role="dialog"
       aria-modal="true"
       aria-labelledby="payment-modal-title"
-      onClick={onClose}
     >
       <section
         className="animate-fade-in w-full max-w-md overflow-hidden rounded-xl border border-border bg-surface shadow-2xl"

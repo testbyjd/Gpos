@@ -243,6 +243,52 @@ export function PanelHeader({
   );
 }
 
+export function PageLoadError({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => void;
+}) {
+  return (
+    <PagePanel className="mb-4 flex flex-col items-center gap-3 p-8 text-center">
+      <p className="text-sm font-bold text-danger">{message}</p>
+      <p className="text-xs text-muted-foreground">Yeh server se data nahi aaya — khali list mat samjho.</p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="h-9 rounded-md bg-primary px-4 text-sm font-bold text-primary-foreground shadow-sm hover:bg-primary-hover"
+      >
+        Dobara try karo
+      </button>
+    </PagePanel>
+  );
+}
+
+export function PageAlert({
+  message,
+  tone = "info",
+  className,
+}: {
+  message: string;
+  tone?: "success" | "error" | "info";
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "mb-4 rounded-lg border px-4 py-3 text-sm font-semibold",
+        tone === "error" && "border-danger/30 bg-danger/5 text-danger",
+        tone === "success" && "border-success/30 bg-success/5 text-success",
+        tone === "info" && "border-border/80 bg-muted/60 text-foreground",
+        className,
+      )}
+    >
+      {message}
+    </div>
+  );
+}
+
 export function StatusPill({
   tone = "neutral",
   children,

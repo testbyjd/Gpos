@@ -3,15 +3,18 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { KeyRound, MonitorCog, Pencil, ShieldCheck, Store, UserPlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AppToast, useAppToast } from "@/components/ui/app-toast";
 import { SearchInput } from "@/components/ui/search-input";
 import { FilterChips } from "@/components/ui/filter-chips";
 import { getUsersSettings, updateUserPassword } from "@/lib/admin-api";
+import { getErrorMessage } from "@/lib/api";
 import { UserFormModal } from "@/features/admin/components/AdminActionModals";
 import { ModalPortal } from "@/components/ui/modal-portal";
 import { useModalDismiss } from "@/lib/hooks/useModalDismiss";
 import {
   AdminShell,
   DataTable,
+  PageAlert,
   PagePanel,
   PanelHeader,
   StatusPill,
@@ -30,7 +33,7 @@ function ResetPasswordModal({
   onClose: () => void;
   onSaved: (message: string) => void;
 }) {
-  useModalDismiss(onClose);
+  useModalDismiss(onClose, { escape: false });
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -52,8 +55,8 @@ function ResetPasswordModal({
       const res = await updateUserPassword(user.id, password);
       onSaved(res.message);
       onClose();
-    } catch {
-      setError("Password update fail. Dobara try karo.");
+    } catch (err) {
+      setError(getErrorMessage(err, "Password update fail. Dobara try karo."));
     } finally {
       setSaving(false);
     }
@@ -136,13 +139,22 @@ export default function SettingsPage() {
   const [search, setSearch] = useState("");
   const [role, setRole] = useState<(typeof ROLES)[number]>("All");
   const [data, setData] = useState<SettingsData | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const { toast, showToast, hideToast } = useAppToast();
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [resetUser, setResetUser] = useState<UserRow | null>(null);
   const [editUser, setEditUser] = useState<UserRow | null>(null);
   const [showAddUser, setShowAddUser] = useState(false);
 
   function loadUsers() {
-    getUsersSettings().then(setData).catch(() => setData(null));
+    getUsersSettings()
+      .then((res) => {
+        setData(res);
+        setLoadError(null);
+      })
+      .catch((err) => {
+        setData(null);
+        setLoadError(getErrorMessage(err, "Users load nahi hue. Server check karo."));
+      });
   }
 
   useEffect(() => {
@@ -162,11 +174,8 @@ export default function SettingsPage() {
 
   return (
     <AdminShell title="Settings" eyebrow="Store, roles and hardware" allowedRoles={["owner"]} actions={<Button size="sm" onClick={() => setShowAddUser(true)}><UserPlus className="h-4 w-4" />User</Button>}>
-      {notice && (
-        <div className="mb-4 rounded-lg border border-border/80 bg-muted/60 px-4 py-3 text-sm font-semibold text-foreground">
-          {notice}
-        </div>
-      )}
+      {loadError && <PageAlert message={loadError} tone="error" />}
+      <AppToast toast={toast} onDismiss={hideToast} />
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_390px]">
         <div className="grid gap-4">
@@ -253,13 +262,13 @@ export default function SettingsPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-md bg-muted p-3">
                 <ShieldCheck className="h-5 w-5 text-success" />
-                <p className="mt-2 text-xs text-muted-foreground">Audit log</p>
-                <p className="font-black text-foreground">Enabled</p>
+                <p className="mt-2 text-xs text-muted-foreground">Activity log</p>
+                <p className="font-black text-foreground">Server-side</p>
               </div>
               <div className="rounded-md bg-muted p-3">
                 <MonitorCog className="h-5 w-5 text-primary" />
-                <p className="mt-2 text-xs text-muted-foreground">Offline queue</p>
-                <p className="font-black text-foreground">Ready</p>
+                <p className="mt-2 text-xs text-muted-foreground">Billing mode</p>
+                <p className="font-black text-foreground">Online-only</p>
               </div>
             </div>
           </PagePanel>
@@ -270,7 +279,10 @@ export default function SettingsPage() {
         <ResetPasswordModal
           user={resetUser}
           onClose={() => setResetUser(null)}
-          onSaved={setNotice}
+          onSaved={(msg) => {
+            showToast(msg, "success");
+            loadUsers();
+          }}
         />
       )}
 
@@ -278,7 +290,7 @@ export default function SettingsPage() {
         <UserFormModal
           onClose={() => setShowAddUser(false)}
           onSaved={(msg) => {
-            setNotice(msg);
+            showToast(msg, "success");
             loadUsers();
           }}
         />
@@ -289,7 +301,7 @@ export default function SettingsPage() {
           user={editUser}
           onClose={() => setEditUser(null)}
           onSaved={(msg) => {
-            setNotice(msg);
+            showToast(msg, "success");
             loadUsers();
           }}
         />

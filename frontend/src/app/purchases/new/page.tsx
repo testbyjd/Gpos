@@ -1,11 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
-  CheckCircle2,
   PackagePlus,
   Plus,
   ScanLine,
@@ -13,9 +12,11 @@ import {
   Truck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AppToast, useAppToast } from "@/components/ui/app-toast";
 import { cn, formatMoney } from "@/lib/utils";
 import {
   AdminShell,
+  PageAlert,
   PagePanel,
   PanelHeader,
   StatusPill,
@@ -24,9 +25,15 @@ import {
   ReceiveItemModal,
   type DraftLine,
 } from "@/features/vendors/components/ReceiveItemModal";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, getErrorMessage } from "@/lib/api";
 import { listProducts, listVendors, type ProductRow, type VendorRow } from "@/lib/admin-api";
 import type { PurchaseProduct } from "@/features/vendors/data/purchasing";
+import {
+  PURCHASE_PAYMENT_TERMS,
+  clampPaidAmount,
+  purchaseTermLabel,
+  type PurchasePaymentTerm,
+} from "@/features/vendors/data/payment-terms";
 
 type ScanTarget = { barcode: string; existing?: PurchaseProduct };
 
@@ -41,14 +48,47 @@ export default function NewPurchasePage() {
   const [barcode, setBarcode] = useState("");
   const [lines, setLines] = useState<DraftLine[]>([]);
   const [scan, setScan] = useState<ScanTarget | null>(null);
-  const [terms, setTerms] = useState("On account");
-  const [toast, setToast] = useState<string | null>(null);
+  const [terms, setTerms] = useState<PurchasePaymentTerm>("on_account");
+  const [paidInput, setPaidInput] = useState("0");
+  const { toast, showToast, hideToast } = useAppToast();
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [posting, setPosting] = useState(false);
 
   const barcodeRef = useRef<HTMLInputElement>(null);
+  const postClientId = useRef<string | null>(null);
 
   const subtotal = lines.reduce((s, l) => s + l.qty * l.cost, 0);
-  const canPost = vendor !== "" && lines.length > 0;
+  const paidAmount = clampPaidAmount(subtotal, paidInput);
+  const balanceDue = Math.max(0, subtotal - paidAmount);
+  const canPost = vendor !== "" && lines.length > 0 && paidAmount <= subtotal;
+  const hasDraft = lines.length > 0;
+
+  useEffect(() => {
+    const option = PURCHASE_PAYMENT_TERMS.find((t) => t.value === terms);
+    if (option?.payFull) {
+      setPaidInput(subtotal > 0 ? String(subtotal) : "0");
+    }
+  }, [terms, subtotal]);
+
+  useEffect(() => {
+    if (!hasDraft) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [hasDraft]);
+
+  function confirmLeave(): boolean {
+    if (!hasDraft) return true;
+    return window.confirm(
+      "Draft abhi save nahi hui — sirf list mein hai.\n\nBahar jao ge to items kho jayenge. Post purchase pehle karein ya Cancel karein.",
+    );
+  }
+
+  function handleBackClick(e: MouseEvent<HTMLAnchorElement>) {
+    if (!confirmLeave()) e.preventDefault();
+  }
 
   useEffect(() => {
     let alive = true;
@@ -58,10 +98,11 @@ export default function NewPurchasePage() {
         setVendors(vendorRes.data);
         setProducts(productRes.data);
       })
-      .catch(() => {
+      .catch((err) => {
         if (!alive) return;
         setVendors([]);
         setProducts([]);
+        setLoadError(getErrorMessage(err, "Vendors/products load nahi hue. Server check karo."));
       });
     return () => {
       alive = false;
@@ -92,6 +133,7 @@ export default function NewPurchasePage() {
   function addLine(line: Omit<DraftLine, "id">) {
     setLines((prev) => [...prev, { ...line, id: crypto.randomUUID() }]);
     setScan(null);
+    showToast(`"${line.name}" list mein add ho gaya — Post purchase dabao.`, "info");
     setTimeout(() => barcodeRef.current?.focus(), 0);
   }
 
@@ -101,14 +143,18 @@ export default function NewPurchasePage() {
 
   async function postPurchase() {
     if (!canPost || posting) return;
+    if (!postClientId.current) {
+      postClientId.current = crypto.randomUUID();
+    }
     setPosting(true);
     try {
       await apiFetch("/purchases", {
         method: "POST",
         body: JSON.stringify({
+          client_id: postClientId.current,
           vendor_id: Number(vendor),
-          payment_terms: terms.toLowerCase().replaceAll(" ", "_"),
-          paid_amount: 0,
+          payment_terms: terms,
+          paid_amount: paidAmount,
           lines: lines.map((line) => {
             const existing = products.find((product) => product.barcode && product.barcode === line.barcode);
             return {
@@ -125,14 +171,15 @@ export default function NewPurchasePage() {
           }),
         }),
       });
-      setToast(`Purchase posted · ${formatMoney(subtotal)}`);
+      const termNote = paidAmount > 0 ? " · paid" : " · on account";
+      showToast(`Purchase posted · ${formatMoney(subtotal)}${termNote}`, "success");
+      postClientId.current = null;
       setLines([]);
-      router.push("/purchases");
-    } catch {
-      setToast("Purchase post nahi hui. Backend/API check karo.");
+      window.setTimeout(() => router.push("/purchases?posted=1"), 900);
+    } catch (err) {
+      showToast(getErrorMessage(err, "Purchase post nahi hui. Backend/API check karo."), "error");
     } finally {
       setPosting(false);
-      setTimeout(() => setToast(null), 2600);
     }
   }
 
@@ -143,6 +190,7 @@ export default function NewPurchasePage() {
       actions={
         <Link
           href="/purchases"
+          onClick={handleBackClick}
           className="flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-bold text-muted-foreground transition-colors hover:bg-card-hover hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -150,6 +198,13 @@ export default function NewPurchasePage() {
         </Link>
       }
     >
+      {loadError && <PageAlert message={loadError} tone="error" />}
+      {hasDraft && !loadError && (
+        <PageAlert
+          message="Draft list mein hai — stock tab tak update nahi hoga jab tak Post purchase na dabao."
+          tone="info"
+        />
+      )}
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="grid gap-4">
           {/* Step 1: vendor + barcode */}
@@ -295,6 +350,16 @@ export default function NewPurchasePage() {
                 <span className="font-semibold text-foreground">Subtotal</span>
                 <span className="text-2xl font-black tabular-nums text-primary">{formatMoney(subtotal)}</span>
               </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Paid now</span>
+                <span className="font-bold tabular-nums text-success">{formatMoney(paidAmount)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Balance due</span>
+                <span className={cn("font-bold tabular-nums", balanceDue > 0 ? "text-warning" : "text-success")}>
+                  {formatMoney(balanceDue)}
+                </span>
+              </div>
             </div>
           </PagePanel>
 
@@ -303,14 +368,39 @@ export default function NewPurchasePage() {
               <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-muted-foreground">
                 Payment terms
               </span>
-              <select value={terms} onChange={(e) => setTerms(e.target.value)} className={inputCls}>
-                <option>On account</option>
-                <option>Pay now (cash)</option>
-                <option>Bank transfer</option>
+              <select
+                value={terms}
+                onChange={(e) => setTerms(e.target.value as PurchasePaymentTerm)}
+                className={inputCls}
+              >
+                {PURCHASE_PAYMENT_TERMS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </label>
+            <label className="mt-3 block">
+              <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                Paid now (Rs)
+              </span>
+              <input
+                type="number"
+                min={0}
+                max={subtotal}
+                step="0.01"
+                value={paidInput}
+                onChange={(e) => setPaidInput(e.target.value)}
+                className={inputCls}
+              />
+            </label>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {terms === "on_account"
+                ? "Jitna abhi diya us ki amount likho — baqi vendor balance (udhar) mein jayega."
+                : `${purchaseTermLabel(terms)} — default poora amount paid; kam zyada adjust kar sakte ho.`}
+            </p>
             <Button size="lg" className="mt-4 w-full" disabled={!canPost || posting} onClick={postPurchase}>
-              <CheckCircle2 className="h-5 w-5" />
+              <PackagePlus className="h-5 w-5" />
               {posting ? "Posting..." : "Post purchase"}
             </Button>
             {!canPost && (
@@ -331,12 +421,7 @@ export default function NewPurchasePage() {
         />
       )}
 
-      {toast && (
-        <div className="animate-fade-in fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-success/30 bg-success px-4 py-2.5 text-sm font-medium text-white shadow-lg">
-          <CheckCircle2 className="h-5 w-5" />
-          {toast}
-        </div>
-      )}
+      <AppToast toast={toast} onDismiss={hideToast} />
     </AdminShell>
   );
 }

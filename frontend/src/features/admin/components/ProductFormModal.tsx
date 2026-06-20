@@ -13,6 +13,7 @@ import {
   type ProductInput,
   type ProductRow,
 } from "@/lib/admin-api";
+import { getErrorMessage } from "@/lib/api";
 
 const UNITS = ["pcs", "kg", "g", "litre", "dozen", "pack"] as const;
 
@@ -30,7 +31,7 @@ interface Props {
 }
 
 export function ProductFormModal({ product, categories, onClose, onSaved, onCategoryAdded }: Props) {
-  useModalDismiss(onClose);
+  useModalDismiss(onClose, { escape: false });
   const barcodeRef = useRef<HTMLInputElement>(null);
   const isEdit = product !== null;
 
@@ -94,8 +95,8 @@ export function ProductFormModal({ product, categories, onClose, onSaved, onCate
         : await createProduct(payload);
       onSaved(res.data);
       onClose();
-    } catch {
-      setError("Save failed. Barcode duplicate ho sakta hai — dobara check karo.");
+    } catch (err) {
+      setError(getErrorMessage(err, "Save failed. Barcode duplicate ho sakta hai — dobara check karo."));
     } finally {
       setSaving(false);
     }
@@ -113,8 +114,8 @@ export function ProductFormModal({ product, categories, onClose, onSaved, onCate
       setNewCategoryName("");
       setShowNewCategory(false);
       onCategoryAdded?.(res.data);
-    } catch {
-      setError("Category add nahi hui.");
+    } catch (err) {
+      setError(getErrorMessage(err, "Category add nahi hui."));
     } finally {
       setAddingCategory(false);
     }

@@ -1,13 +1,16 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { FormEvent, Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { LockKeyhole, Store } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { getStoredUser, login } from "@/lib/auth";
+import { getErrorMessage } from "@/lib/api";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const sessionExpired = searchParams.get("expired") === "1";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -36,10 +39,9 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const user = await login(email, password);
-      // Cashiers land on the POS register; owners/managers on the admin panel.
       router.push(user.role === "cashier" ? "/" : "/dashboard");
-    } catch {
-      setError("Login failed. Check email/password or backend server.");
+    } catch (err) {
+      setError(getErrorMessage(err, "Login failed. Email/password ya server check karo."));
     } finally {
       setLoading(false);
     }
@@ -101,6 +103,12 @@ export default function LoginPage() {
             </label>
           </div>
 
+          {sessionExpired && (
+            <p className="mt-3 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm font-bold text-warning">
+              Session expire ho gaya — dobara login karo.
+            </p>
+          )}
+
           {error && (
             <p className="mt-3 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm font-bold text-danger">
               {error}
@@ -120,3 +128,16 @@ export default function LoginPage() {
   );
 }
 
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-background text-sm font-semibold text-muted-foreground">
+          Loading…
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
+  );
+}

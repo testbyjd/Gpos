@@ -1,15 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Printer, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AppToast, useAppToast } from "@/components/ui/app-toast";
+import { Printer, Save } from "lucide-react";
 import {
   getReceiptSettings,
   updateReceiptSettings,
   type ReceiptSettings,
 } from "@/lib/admin-api";
+import { getErrorMessage } from "@/lib/api";
 import { ReceiptPreview } from "@/features/admin/components/ReceiptPreview";
-import { AdminShell, PagePanel, PanelHeader } from "@/features/admin/components/AdminShell";
+import { AdminShell, PageAlert, PagePanel, PanelHeader } from "@/features/admin/components/AdminShell";
 
 const DEFAULTS: ReceiptSettings = {
   shop_name: "Gondal Traders",
@@ -30,13 +32,21 @@ export default function ReceiptPage() {
   const [settings, setSettings] = useState<ReceiptSettings>(DEFAULTS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
+  const { toast, showToast, hideToast } = useAppToast();
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
     getReceiptSettings()
-      .then((res) => alive && setSettings({ ...DEFAULTS, ...res.data }))
-      .catch(() => {})
+      .then((res) => {
+        if (!alive) return;
+        setSettings({ ...DEFAULTS, ...res.data });
+        setLoadError(null);
+      })
+      .catch((err) => {
+        if (!alive) return;
+        setLoadError(getErrorMessage(err, "Receipt settings load nahi hui. Server check karo."));
+      })
       .finally(() => alive && setLoading(false));
     return () => {
       alive = false;
@@ -49,13 +59,12 @@ export default function ReceiptPage() {
 
   async function save() {
     setSaving(true);
-    setNotice(null);
     try {
       const res = await updateReceiptSettings(settings);
       setSettings({ ...DEFAULTS, ...res.data });
-      setNotice("Receipt settings save ho gayi.");
-    } catch {
-      setNotice("Save fail. Dobara try karo.");
+      showToast("Receipt settings save ho gayi.", "success");
+    } catch (err) {
+      showToast(getErrorMessage(err, "Save fail. Dobara try karo."), "error");
     } finally {
       setSaving(false);
     }
@@ -79,11 +88,8 @@ export default function ReceiptPage() {
         </div>
       }
     >
-      {notice && (
-        <div className="mb-4 rounded-lg border border-border/80 bg-muted/60 px-4 py-3 text-sm font-semibold text-foreground print:hidden">
-          {notice}
-        </div>
-      )}
+      {loadError && <PageAlert message={loadError} tone="error" className="print:hidden" />}
+      <AppToast toast={toast} onDismiss={hideToast} />
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <PagePanel className="print:hidden">

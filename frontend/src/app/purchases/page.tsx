@@ -1,77 +1,141 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, Plus } from "lucide-react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { CalendarDays, Plus, RefreshCw } from "lucide-react";
+import { AppToast, useAppToast } from "@/components/ui/app-toast";
+import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
 import { StatCard } from "@/components/ui/stat-card";
-import { formatMoney } from "@/lib/utils";
+import { cn, formatMoney } from "@/lib/utils";
 import { listPurchases, type PurchaseRow } from "@/lib/admin-api";
+import { getErrorMessage } from "@/lib/api";
 import { PurchaseDetailModal } from "@/features/admin/components/DetailDrawers";
-import { AdminShell, DataTable, PagePanel, PanelHeader, StatusPill } from "@/features/admin/components/AdminShell";
+import {
+  AdminShell,
+  DataTable,
+  PageAlert,
+  PageLoadError,
+  PagePanel,
+  PanelHeader,
+  StatusPill,
+} from "@/features/admin/components/AdminShell";
 
 function stateTone(balance: number) {
   return balance > 0 ? "warn" : "good";
 }
 
-export default function PurchasesPage() {
+function PurchasesPageContent() {
+  const searchParams = useSearchParams();
+  const justPosted = searchParams.get("posted") === "1";
   const [purchases, setPurchases] = useState<PurchaseRow[]>([]);
   const [selected, setSelected] = useState<PurchaseRow | null>(null);
   const [search, setSearch] = useState("");
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const { toast, showToast, hideToast } = useAppToast();
+
+  const postedHandled = useRef(false);
 
   function load() {
-    return listPurchases().then((res) => setPurchases(res.data));
+    setLoading(true);
+    return listPurchases()
+      .then((res) => {
+        setPurchases(res.data);
+        setLoadError(null);
+      })
+      .catch((err) => {
+        setPurchases([]);
+        setLoadError(getErrorMessage(err, "Purchases load nahi hui. Server check karo."));
+      })
+      .finally(() => setLoading(false));
   }
 
   useEffect(() => {
-    let alive = true;
-    load().catch(() => alive && setPurchases([]));
-    return () => { alive = false; };
+    load();
   }, []);
+
+  useEffect(() => {
+    if (!justPosted || postedHandled.current) return;
+    postedHandled.current = true;
+    showToast("Purchase save ho gaya — sab se naya GRN upar hai.", "success");
+    window.history.replaceState({}, "", "/purchases");
+  }, [justPosted, showToast]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     return purchases.filter((p) => !q || [p.grn_no, p.vendor?.name ?? ""].some((x) => x.toLowerCase().includes(q)));
   }, [purchases, search]);
   const total = purchases.reduce((sum, p) => sum + Number(p.subtotal), 0);
+  const latestId = filtered[0]?.id;
 
   return (
     <AdminShell
       title="Purchases"
       eyebrow="Goods received and cost updates"
-      actions={<Link href="/purchases/new" className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-3 text-sm font-bold text-primary-foreground shadow-sm transition-colors hover:bg-primary-hover"><Plus className="h-4 w-4" />New Purchase</Link>}
-    >
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <PagePanel>
-          <PanelHeader title="Purchase register" meta={`${filtered.length} GRNs from backend`} actions={<SearchInput label="Search GRN or vendor" value={search} onChange={(e) => setSearch(e.target.value)} className="w-60" containerClassName="hidden sm:block" />} />
-          <DataTable
-            columns={["GRN", "Date", "Vendor", "Items", "Amount", "Balance", "State"]}
-            minWidth="760px"
-            rows={filtered.map((purchase) => {
-              const balance = Number(purchase.balance_amount);
-              return [
-                <button key="grn" onClick={() => setSelected(purchase)} className="text-left font-black text-primary hover:underline">{purchase.grn_no}</button>,
-                new Date(purchase.received_at).toLocaleDateString("en-PK"),
-                <span key="vendor" className="font-bold text-foreground">{purchase.vendor?.name ?? "—"}</span>,
-                purchase.lines.map((l) => l.product?.name).filter(Boolean).join(", ") || `${purchase.lines.length} lines`,
-                <span key="amount" className="font-black tabular-nums text-foreground">{formatMoney(Number(purchase.subtotal))}</span>,
-                <span key="balance" className="font-bold tabular-nums text-foreground">{formatMoney(balance)}</span>,
-                <StatusPill key="state" tone={stateTone(balance)}>{balance > 0 ? "Partial" : "Paid"}</StatusPill>,
-              ];
-            })}
-          />
-        </PagePanel>
-
-        <div className="grid gap-4">
-          <StatCard label="Purchases total" value={formatMoney(total)} icon={Plus} tone="primary" />
-          <PagePanel className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10 text-accent ring-1 ring-accent/20"><CalendarDays className="h-5 w-5" /></div>
-              <div><p className="font-black text-foreground">Cost engine</p><p className="text-xs text-muted-foreground">Moving-average cost is applied in backend service.</p></div>
-            </div>
-          </PagePanel>
+      actions={
+        <div className="flex gap-2">
+          <Button size="sm" variant="secondary" onClick={() => load()} disabled={loading}>
+            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+            Refresh
+          </Button>
+          <Link href="/purchases/new" className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-3 text-sm font-bold text-primary-foreground shadow-sm transition-colors hover:bg-primary-hover">
+            <Plus className="h-4 w-4" />
+            New Purchase
+          </Link>
         </div>
-      </div>
+      }
+    >
+      {justPosted && !loadError && (
+        <PageAlert message="Naya GRN save ho gaya — list ke top pe highlight dekho." tone="success" />
+      )}
+      {loadError ? (
+        <PageLoadError message={loadError} onRetry={load} />
+      ) : (
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <PagePanel>
+            <PanelHeader title="Purchase register" meta={`${filtered.length} GRNs from backend`} actions={<SearchInput label="Search GRN or vendor" value={search} onChange={(e) => setSearch(e.target.value)} className="w-60" containerClassName="hidden sm:block" />} />
+            <DataTable
+              columns={["GRN", "Date", "Vendor", "Items", "Amount", "Balance", "State"]}
+              minWidth="760px"
+              rows={filtered.map((purchase) => {
+                const balance = Number(purchase.balance_amount);
+                const highlight = justPosted && purchase.id === latestId;
+                return [
+                  <button
+                    key="grn"
+                    onClick={() => setSelected(purchase)}
+                    className={cn(
+                      "text-left font-black hover:underline",
+                      highlight ? "text-success underline decoration-2" : "text-primary",
+                    )}
+                  >
+                    {purchase.grn_no}
+                    {highlight ? " · new" : ""}
+                  </button>,
+                  new Date(purchase.received_at).toLocaleDateString("en-PK"),
+                  <span key="vendor" className="font-bold text-foreground">{purchase.vendor?.name ?? "—"}</span>,
+                  purchase.lines.map((l) => l.product?.name).filter(Boolean).join(", ") || `${purchase.lines.length} lines`,
+                  <span key="amount" className="font-black tabular-nums text-foreground">{formatMoney(Number(purchase.subtotal))}</span>,
+                  <span key="balance" className="font-bold tabular-nums text-foreground">{formatMoney(balance)}</span>,
+                  <StatusPill key="state" tone={stateTone(balance)}>{balance > 0 ? "Partial" : "Paid"}</StatusPill>,
+                ];
+              })}
+            />
+          </PagePanel>
+
+          <div className="grid gap-4">
+            <StatCard label="Purchases total" value={formatMoney(total)} icon={Plus} tone="primary" />
+            <PagePanel className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10 text-accent ring-1 ring-accent/20"><CalendarDays className="h-5 w-5" /></div>
+                <div><p className="font-black text-foreground">Cost engine</p><p className="text-xs text-muted-foreground">Moving-average cost is applied in backend service.</p></div>
+              </div>
+            </PagePanel>
+          </div>
+        </div>
+      )}
 
       {selected && (
         <PurchaseDetailModal
@@ -80,6 +144,15 @@ export default function PurchasesPage() {
           onReturned={() => load()}
         />
       )}
+      <AppToast toast={toast} onDismiss={hideToast} />
     </AdminShell>
+  );
+}
+
+export default function PurchasesPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-sm font-semibold text-muted-foreground">Loading purchases…</div>}>
+      <PurchasesPageContent />
+    </Suspense>
   );
 }

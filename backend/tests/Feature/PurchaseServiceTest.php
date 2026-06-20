@@ -12,6 +12,37 @@ class PurchaseServiceTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_purchase_create_is_idempotent_on_client_id(): void
+    {
+        $vendor = Vendor::create(['name' => 'Rice Mill', 'balance' => 0, 'is_active' => true]);
+        $product = Product::create([
+            'name' => 'Basmati Rice',
+            'unit' => 'kg',
+            'avg_cost' => 200,
+            'sell_price' => 260,
+            'stock_qty' => 10,
+            'low_stock_threshold' => 5,
+            'is_active' => true,
+        ]);
+
+        $clientId = '550e8400-e29b-41d4-a716-446655440000';
+        $payload = [
+            'client_id' => $clientId,
+            'vendor_id' => $vendor->id,
+            'lines' => [
+                ['product_id' => $product->id, 'qty' => 5, 'unit_cost' => 210],
+            ],
+        ];
+
+        $service = app(PurchaseService::class);
+        $first = $service->create($payload);
+        $second = $service->create($payload);
+
+        $this->assertEquals($first->id, $second->id);
+        $this->assertEquals(1, \App\Modules\Vendors\Models\Purchase::count());
+        $this->assertEquals($clientId, $first->client_id);
+    }
+
     public function test_goods_receipt_recalculates_moving_average_cost(): void
     {
         $product = Product::create([

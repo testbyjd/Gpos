@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatMoney } from "@/lib/utils";
 import { useModalDismiss } from "@/lib/hooks/useModalDismiss";
@@ -53,7 +53,6 @@ export function SaleSuccessModal({ sale, onClose }: Props) {
       role="dialog"
       aria-modal="true"
       aria-labelledby="sale-success-title"
-      onClick={onClose}
     >
       <section
         className="animate-fade-in w-full max-w-sm overflow-hidden rounded-xl border border-border bg-surface shadow-2xl"
@@ -114,12 +113,17 @@ export function SaleSuccessModal({ sale, onClose }: Props) {
         </div>
 
         <div className="p-6 pt-4">
-          <Button size="lg" className="w-full" onClick={onClose} autoFocus>
-            New Sale
-          </Button>
+          <div className="grid grid-cols-2 gap-2">
+            <Button size="lg" variant="secondary" className="w-full" onClick={() => window.print()}>
+              <Printer className="h-4 w-4" />
+              Print
+            </Button>
+            <Button size="lg" className="w-full" onClick={onClose} autoFocus>
+              New Sale
+            </Button>
+          </div>
           <p className="mt-2 text-center text-[11px] text-muted-foreground">
-            Press <kbd className="rounded border border-border bg-muted px-1">Enter</kbd> or{" "}
-            <kbd className="rounded border border-border bg-muted px-1">Esc</kbd> to start the next sale
+            Press <kbd className="rounded border border-border bg-muted px-1">Enter</kbd> for next sale
           </p>
         </div>
       </section>

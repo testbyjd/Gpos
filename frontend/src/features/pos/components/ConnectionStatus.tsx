@@ -1,57 +1,29 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 import { Cloud, CloudOff } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { checkApiHealth } from "@/lib/api";
+import { useBillingConnection } from "@/lib/connection-status";
 import {
   formatLastSync,
   formatLastSyncFull,
   getLastSyncAt,
   getLastSyncAtServerSnapshot,
-  recordSync,
   subscribeSync,
 } from "@/lib/sync-status";
-
-function subscribeToConnectionChange(onStoreChange: () => void) {
-  const onOnline = () => {
-    recordSync();
-    onStoreChange();
-  };
-  window.addEventListener("online", onOnline);
-  window.addEventListener("offline", onStoreChange);
-  return () => {
-    window.removeEventListener("online", onOnline);
-    window.removeEventListener("offline", onStoreChange);
-  };
-}
-
-function getConnectionSnapshot() {
-  return navigator.onLine;
-}
 
 function subscribeTick(onStoreChange: () => void) {
   const id = window.setInterval(onStoreChange, 30_000);
   return () => window.clearInterval(id);
 }
 
-/**
- * Shows live online/offline state. Billing is online-only: when offline the
- * cashier sees "billing paused" and checkout is blocked until the connection
- * (and the server) are reachable again.
- */
+/** Live online/offline badge — billing only when browser + server are reachable. */
 export function ConnectionStatus() {
-  const [apiOnline, setApiOnline] = useState(true);
+  const { connected } = useBillingConnection();
   const mounted = useSyncExternalStore(
     () => () => {},
     () => true,
     () => false,
-  );
-
-  const online = useSyncExternalStore(
-    subscribeToConnectionChange,
-    getConnectionSnapshot,
-    () => true,
   );
 
   const lastSyncAt = useSyncExternalStore(
@@ -61,41 +33,15 @@ export function ConnectionStatus() {
   );
 
   const now = useSyncExternalStore(subscribeTick, () => Date.now(), () => 0);
-
-  useEffect(() => {
-    let alive = true;
-    async function ping() {
-      if (!navigator.onLine) {
-        if (alive) setApiOnline(false);
-        return;
-      }
-      const healthy = await checkApiHealth();
-      if (!alive) return;
-      setApiOnline(healthy);
-      if (healthy) {
-        recordSync();
-      }
-    }
-    void ping();
-    const id = window.setInterval(ping, 30_000);
-    window.addEventListener("online", ping);
-    return () => {
-      alive = false;
-      window.clearInterval(id);
-      window.removeEventListener("online", ping);
-    };
-  }, []);
-
-  const connected = online && apiOnline;
   const syncLabel = mounted ? formatLastSync(lastSyncAt, now) : null;
 
   const title = mounted
     ? connected
       ? `Online — billing live (last contact ${formatLastSyncFull(lastSyncAt)})`
-      : `Offline — billing paused, internet needed (last contact ${formatLastSyncFull(lastSyncAt)})`
+      : `Offline — billing paused, server/internet chahiye (last contact ${formatLastSyncFull(lastSyncAt)})`
     : connected
       ? "Online — billing live"
-      : "Offline — billing paused (internet needed)";
+      : "Offline — billing paused";
 
   return (
     <div

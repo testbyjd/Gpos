@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, Download, Printer, TrendingUp } from "lucide-react";
+import { CalendarDays, Download, Loader2, Printer, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FilterChips } from "@/components/ui/filter-chips";
 import { cn, formatMoney } from "@/lib/utils";
 import { getReports } from "@/lib/admin-api";
+import { getErrorMessage } from "@/lib/api";
 import {
   AdminShell,
   DataTable,
+  PageLoadError,
   PagePanel,
   PanelHeader,
   StatusPill,
@@ -47,13 +49,44 @@ export default function ReportsPage() {
   const [customTo, setCustomTo] = useState(() => ymd(new Date()));
   const [category, setCategory] = useState("All");
   const [data, setData] = useState<ReportsData | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const { from, to } = range === "Custom" ? { from: customFrom, to: customTo } : presetDates(range);
 
+  function loadReports() {
+    if (!from || !to) return Promise.resolve();
+    setLoading(true);
+    return getReports(from, to)
+      .then((res) => {
+        setData(res);
+        setLoadError(null);
+      })
+      .catch((err) => {
+        setData(null);
+        setLoadError(getErrorMessage(err, "Reports load nahi hue. Server check karo."));
+      })
+      .finally(() => setLoading(false));
+  }
+
   useEffect(() => {
-    if (!from || !to) return;
     let alive = true;
-    getReports(from, to).then((res) => alive && setData(res)).catch(() => alive && setData(null));
+    if (!from || !to) return;
+    setLoading(true);
+    getReports(from, to)
+      .then((res) => {
+        if (!alive) return;
+        setData(res);
+        setLoadError(null);
+      })
+      .catch((err) => {
+        if (!alive) return;
+        setData(null);
+        setLoadError(getErrorMessage(err, "Reports load nahi hue. Server check karo."));
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
     return () => {
       alive = false;
     };
@@ -68,6 +101,7 @@ export default function ReportsPage() {
     [category, data],
   );
   const totalTopSales = (data?.top_items ?? []).reduce((sum, item) => sum + item.amount, 0);
+  const showData = !loading && !loadError && data;
 
   function exportCsv() {
     if (!data) return;
@@ -104,6 +138,8 @@ export default function ReportsPage() {
         </div>
       }
     >
+      {loadError && <PageLoadError message={loadError} onRetry={loadReports} />}
+
       <div className="no-print mb-4 flex flex-wrap items-center gap-2">
         {RANGES.filter((r) => r !== "Custom").map((label) => (
           <button
@@ -149,6 +185,14 @@ export default function ReportsPage() {
         )}
       </div>
 
+      {loading && !loadError && (
+        <PagePanel className="mb-4 flex items-center justify-center gap-2 p-8 text-sm font-semibold text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          Reports load ho rahe hain…
+        </PagePanel>
+      )}
+
+      {showData && (
       <div className="print-area grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="col-span-full mb-2 hidden print:block">
           <h2 className="text-xl font-black text-foreground">Gondal Traders — Report</h2>
@@ -157,9 +201,9 @@ export default function ReportsPage() {
         <div className="grid gap-4">
           <div className="grid gap-3 sm:grid-cols-3">
             {[
-              ["Gross sales", data?.gross_sales ?? 0, "Live API"],
-              ["Gross profit", data?.gross_profit ?? 0, "Avg cost basis"],
-              ["Net receivable", data?.net_receivable ?? 0, "Khata open"],
+              ["Gross sales", data.gross_sales, "Live API"],
+              ["Gross profit", data.gross_profit, "Avg cost basis"],
+              ["Net receivable", data.net_receivable, "Khata open"],
             ].map(([label, value, meta]) => (
               <PagePanel key={label} className="p-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
@@ -191,7 +235,7 @@ export default function ReportsPage() {
             <PanelHeader title="Day-end closing" meta="Expected settlement by payment method" />
             <DataTable
               columns={["Method", "Amount"]}
-              rows={(data?.payment_breakdown ?? []).map((row) => [
+              rows={(data.payment_breakdown ?? []).map((row) => [
                 <span key="method" className="font-bold capitalize text-foreground">{row.method}</span>,
                 <span key="amount" className="font-black tabular-nums text-foreground">{formatMoney(row.amount)}</span>,
               ])}
@@ -203,7 +247,7 @@ export default function ReportsPage() {
           <PagePanel>
             <PanelHeader title="Top-selling items" meta="By sale amount" actions={<TrendingUp className="h-4 w-4 text-primary" />} />
             <div className="space-y-3 p-4">
-              {(data?.top_items ?? []).map((item) => {
+              {(data.top_items ?? []).map((item) => {
                 const width = `${Math.max(18, totalTopSales ? (item.amount / totalTopSales) * 100 : 18)}%`;
                 return (
                   <div key={item.name}>
@@ -220,11 +264,12 @@ export default function ReportsPage() {
                   </div>
                 );
               })}
-              {data?.top_items.length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">No sales yet.</p>}
+              {data.top_items.length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">No sales yet.</p>}
             </div>
           </PagePanel>
         </div>
       </div>
+      )}
     </AdminShell>
   );
 }

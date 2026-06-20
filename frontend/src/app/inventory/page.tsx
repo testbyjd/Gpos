@@ -3,20 +3,45 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CalendarClock, Download, Pencil, Plus, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AppToast, useAppToast } from "@/components/ui/app-toast";
 import { SearchInput } from "@/components/ui/search-input";
 import { FilterChips } from "@/components/ui/filter-chips";
 import { StatCard } from "@/components/ui/stat-card";
 import { formatMoney } from "@/lib/utils";
 import { deleteProduct, listCategories, listProducts, type CategoryRow, type ProductRow } from "@/lib/admin-api";
+import { getErrorMessage } from "@/lib/api";
 import { CategoryFormModal } from "@/features/admin/components/AdminActionModals";
 import { ProductFormModal } from "@/features/admin/components/ProductFormModal";
 import {
   AdminShell,
   DataTable,
+  PageLoadError,
   PagePanel,
   PanelHeader,
   StatusPill,
 } from "@/features/admin/components/AdminShell";
+
+function exportProductsCsv(rows: ProductRow[]) {
+  const header = ["Name", "SKU", "Barcode", "Category", "Unit", "Stock", "Avg cost", "Sell price"];
+  const body = rows.map((p) => [
+    p.name,
+    p.sku ?? `P-${p.id}`,
+    p.barcode ?? "",
+    p.category ?? "",
+    p.unit,
+    Number(p.stock_qty),
+    Number(p.avg_cost),
+    Number(p.sell_price),
+  ]);
+  const csv = [header, ...body].map((row) => row.map((c) => `"${String(c).replaceAll('"', '""')}"`).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `gpos-stock-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 const STATES = ["All", "OK", "Low", "Expiring"] as const;
 const SOON_DAYS = 30;
@@ -40,7 +65,8 @@ export default function InventoryPage() {
   const [search, setSearch] = useState("");
   const [state, setState] = useState<(typeof STATES)[number]>("All");
   const [category, setCategory] = useState("All");
-  const [notice, setNotice] = useState<string | null>(null);
+  const { toast, showToast, hideToast } = useAppToast();
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [formProduct, setFormProduct] = useState<ProductRow | null | "new">(null);
@@ -48,20 +74,26 @@ export default function InventoryPage() {
 
   const loadProducts = useCallback(() => {
     listProducts()
-      .then((res) => setProducts(res.data))
-      .catch(() => setProducts([]));
+      .then((res) => {
+        setProducts(res.data);
+        setLoadError(null);
+      })
+      .catch((err) => {
+        setProducts([]);
+        setLoadError(getErrorMessage(err, "Products load nahi hue. Server check karo."));
+      });
   }, []);
 
   useEffect(() => {
     loadProducts();
     listCategories()
       .then((res) => setCategories(res.data))
-      .catch(() => setCategories([]));
+      .catch((err) => setLoadError(getErrorMessage(err, "Categories load nahi hui. Server check karo.")));
   }, [loadProducts]);
 
   function handleCategorySaved(category: CategoryRow) {
     setCategories((prev) => [...prev, category].sort((a, b) => a.name.localeCompare(b.name)));
-    setNotice(`"${category.name}" category add ho gayi.`);
+    showToast(`"${category.name}" category add ho gayi.`, "success");
   }
 
   function handleSaved(product: ProductRow) {
@@ -70,7 +102,7 @@ export default function InventoryPage() {
       if (idx === -1) return [...prev, product].sort((a, b) => a.name.localeCompare(b.name));
       return prev.map((p) => (p.id === product.id ? product : p));
     });
-    setNotice(formProduct === "new" ? `"${product.name}" add ho gaya.` : `"${product.name}" update ho gaya.`);
+    showToast(formProduct === "new" ? `"${product.name}" add ho gaya.` : `"${product.name}" update ho gaya.`, "success");
     setFormProduct(null);
   }
 
@@ -79,13 +111,12 @@ export default function InventoryPage() {
     if (!window.confirm(`"${product.name}" delete karna hai?\n\n${usedHint}`)) return;
 
     setDeletingId(product.id);
-    setNotice(null);
     try {
       const res = await deleteProduct(product.id);
       setProducts((prev) => prev.filter((p) => p.id !== product.id));
-      setNotice(res.message);
-    } catch {
-      setNotice("Delete failed. Try again.");
+      showToast(res.message, "success");
+    } catch (err) {
+      showToast(getErrorMessage(err, "Delete failed. Try again."), "error");
     } finally {
       setDeletingId(null);
     }
@@ -126,17 +157,18 @@ export default function InventoryPage() {
       eyebrow="Products, stock and costing"
       actions={
         <div className="hidden gap-2 sm:flex">
-          <Button variant="secondary" size="sm" onClick={() => setNotice("CSV import agle update mein aayega.")}><Upload className="h-4 w-4" />Import</Button>
+          <Button variant="secondary" size="sm" disabled title="Import agle update mein aayega">
+            <Upload className="h-4 w-4" />Import (soon)
+          </Button>
           <Button variant="secondary" size="sm" onClick={() => setShowAddCategory(true)}><Plus className="h-4 w-4" />Category</Button>
           <Button size="sm" onClick={() => setFormProduct("new")}><Plus className="h-4 w-4" />Product</Button>
         </div>
       }
     >
-      {notice && (
-        <div className="mb-4 rounded-lg border border-border/80 bg-muted/60 px-4 py-3 text-sm font-semibold text-foreground">
-          {notice}
-        </div>
-      )}
+      {loadError ? (
+        <PageLoadError message={loadError} onRetry={loadProducts} />
+      ) : (
+      <>
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <PagePanel>
           <PanelHeader title="Product master" meta={`${filtered.length} of ${products.length} products · live API`} />
@@ -205,10 +237,17 @@ export default function InventoryPage() {
             </div>
           </PagePanel>
 
-          <PagePanel className="p-4"><Button className="w-full"><Download className="h-4 w-4" />Export stock sheet</Button></PagePanel>
+          <PagePanel className="p-4">
+            <Button className="w-full" onClick={() => exportProductsCsv(filtered)} disabled={filtered.length === 0}>
+              <Download className="h-4 w-4" />Export stock sheet (CSV)
+            </Button>
+          </PagePanel>
         </div>
       </div>
+      </>
+      )}
 
+      <AppToast toast={toast} onDismiss={hideToast} />
       {formProduct !== null && (
         <ProductFormModal
           product={formProduct === "new" ? null : formProduct}

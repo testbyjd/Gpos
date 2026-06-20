@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2 } from "lucide-react";
+import { AppToast, useAppToast } from "@/components/ui/app-toast";
+import { useBillingConnection } from "@/lib/connection-status";
+import { AlertTriangle } from "lucide-react";
 import { PosTopBar } from "./components/PosTopBar";
 import { ProductSearch } from "./components/ProductSearch";
 import { CategoryChips } from "./components/CategoryChips";
@@ -12,10 +14,13 @@ import { SaleSuccessModal, type SaleResult } from "./components/SaleSuccessModal
 import { fetchCatalog } from "./api/catalog";
 import { fetchPosCustomers } from "./api/customers";
 import { submitSale } from "./api/sale";
+import { formatSyncError, syncCartWithCatalog } from "./api/syncCartPrices";
 import { recordSync } from "@/lib/sync-status";
+import { getErrorMessage } from "@/lib/api";
 import type { CartLine, HeldCart, PaymentMethod, Product, PosCustomer } from "./types";
 
 const CATALOG_CACHE_KEY = "gpos.pos.catalog.v1";
+const HELD_CARTS_KEY = "gpos.pos.heldCarts.v1";
 
 interface CatalogCache {
   products: Product[];
@@ -36,7 +41,8 @@ export function PosRegister() {
   const [discount, setDiscount] = useState(0);
   const [payment, setPayment] = useState<PaymentMethod>("cash");
   const [heldCarts, setHeldCarts] = useState<HeldCart[]>([]);
-  const [toast, setToast] = useState<string | null>(null);
+  const { toast, showToast, hideToast } = useAppToast();
+  const { connected: billingOnline } = useBillingConnection();
   const [payOpen, setPayOpen] = useState(false);
   const [saleResult, setSaleResult] = useState<SaleResult | null>(null);
 
@@ -111,13 +117,22 @@ export function PosRegister() {
     setPayment("cash");
   }
 
+  function persistHeldCarts(next: HeldCart[]) {
+    setHeldCarts(next);
+    try {
+      window.localStorage.setItem(HELD_CARTS_KEY, JSON.stringify(next));
+    } catch {
+      /* ignore quota errors */
+    }
+  }
+
   function holdCart() {
     if (lines.length === 0) return;
-    setHeldCarts((prev) => [
-      ...prev,
+    persistHeldCarts([
+      ...heldCarts,
       {
         id: crypto.randomUUID(),
-        label: `#${prev.length + 1}`,
+        label: `#${heldCarts.length + 1}`,
         lines,
         customer,
         customerId,
@@ -125,7 +140,7 @@ export function PosRegister() {
       },
     ]);
     resetSale();
-    showToast("Cart held");
+    showToast("Cart hold ho gaya — is device pe yaad rahega (server pe save nahi).", "info");
   }
 
   function resumeCart(id: string) {
@@ -134,13 +149,28 @@ export function PosRegister() {
     setLines(held.lines);
     setCustomer(held.customer);
     setCustomerId(held.customerId);
-    setHeldCarts((prev) => prev.filter((h) => h.id !== id));
+    persistHeldCarts(heldCarts.filter((h) => h.id !== id));
   }
 
-  function checkout() {
+  async function checkout() {
     if (lines.length === 0) return;
-    if (typeof navigator !== "undefined" && !navigator.onLine) {
-      showToast("Internet nahi — billing band hai. Connection aane par dobara try karein.");
+    if (!billingOnline) {
+      showToast("Server se connection nahi — billing band. Online aane par dobara try karein.", "error");
+      return;
+    }
+    try {
+      const { lines: synced, priceChanges } = await syncCartWithCatalog(lines);
+      setLines(synced);
+      setProducts((prev) => {
+        const merged = new Map(prev.map((p) => [p.id, p]));
+        synced.forEach((l) => merged.set(l.product.id, l.product));
+        return Array.from(merged.values());
+      });
+      if (priceChanges.length > 0) {
+        showToast(`${priceChanges.length} item ki price server rate pe update ho gayi.`, "info");
+      }
+    } catch (err) {
+      showToast(formatSyncError(err), "error");
       return;
     }
     saleClientId.current = crypto.randomUUID();
@@ -150,15 +180,41 @@ export function PosRegister() {
   // Online-only: the sale completes only when the server confirms it.
   // No internet => no bill (throws, cart stays, cashier retries).
   async function confirmSale(tendered: number, change: number) {
+    if (!billingOnline) {
+      showToast("Server se connection nahi — bill save NAHI hoga. Online aane par try karein.", "error");
+      throw new Error("sale-offline");
+    }
+    let billLines = lines;
+    try {
+      const { lines: synced, priceChanges } = await syncCartWithCatalog(lines);
+      billLines = synced;
+      setLines(synced);
+      if (priceChanges.length > 0) {
+        showToast(`${priceChanges.length} item ki price bill se pehle server rate pe set hui.`, "info");
+      }
+    } catch (err) {
+      showToast(formatSyncError(err), "error");
+      throw new Error("sale-sync-failed");
+    }
+
+    const billSubtotal = billLines.reduce((s, l) => s + l.product.price * l.qty, 0);
+    const billTotal = Math.max(0, billSubtotal - discount);
+
     let invoice: string;
     try {
       const res = await submitSale({
         clientId: saleClientId.current ?? crypto.randomUUID(),
-        lines, discount, total, method: payment, tendered, change, customerId,
+        lines: billLines,
+        discount,
+        total: billTotal,
+        method: payment,
+        tendered,
+        change,
+        customerId,
       });
       invoice = res.invoiceNo;
-    } catch {
-      showToast("Internet ya server nahi mila — bill save NAHI hua. Connection check karke dobara try karein.");
+    } catch (err) {
+      showToast(getErrorMessage(err, "Bill save NAHI hua — connection ya server check karke dobara try karein."), "error");
       throw new Error("sale-failed");
     }
     saleClientId.current = null;
@@ -167,7 +223,7 @@ export function PosRegister() {
     setPayOpen(false);
     setSaleResult({
       invoice,
-      total,
+      total: billTotal,
       tendered,
       change,
       method: payment,
@@ -179,11 +235,6 @@ export function PosRegister() {
   function startNewSale() {
     setSaleResult(null);
     searchRef.current?.focus();
-  }
-
-  function showToast(msg: string) {
-    setToast(msg);
-    setTimeout(() => setToast(null), 2200);
   }
 
   useEffect(() => {
@@ -205,6 +256,15 @@ export function PosRegister() {
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lines, discount, customer, heldCarts, payOpen, saleResult]);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(HELD_CARTS_KEY);
+      if (raw) setHeldCarts(JSON.parse(raw) as HeldCart[]);
+    } catch {
+      window.localStorage.removeItem(HELD_CARTS_KEY);
+    }
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -298,11 +358,11 @@ export function PosRegister() {
               </div>
             ) : catalogError ? (
               <div className="flex flex-1 flex-col items-center justify-center gap-2 py-16 text-center text-muted-foreground">
-                <CheckCircle2 className="h-10 w-10 opacity-30" />
+                <AlertTriangle className="h-10 w-10 opacity-30" />
                 <p className="text-sm font-semibold text-foreground">Catalog load nahi hua</p>
                 <p className="max-w-xs text-xs">
-                  Internet se ek baar connect karein taake products download ho
-                  jayein. Uske baad offline billing chalega.
+                  Internet aur server dono chahiye. Jab online ho jayein tab products load honge —
+                  tab hi billing chalegi (offline bill save nahi hota).
                 </p>
               </div>
             ) : (
@@ -350,13 +410,7 @@ export function PosRegister() {
         <SaleSuccessModal sale={saleResult} onClose={startNewSale} />
       )}
 
-      {/* Toast */}
-      {toast && (
-        <div className="animate-fade-in fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-success/30 bg-success px-4 py-2.5 text-sm font-medium text-white shadow-lg">
-          <CheckCircle2 className="h-5 w-5" />
-          {toast}
-        </div>
-      )}
+      <AppToast toast={toast} onDismiss={hideToast} />
     </div>
   );
 }

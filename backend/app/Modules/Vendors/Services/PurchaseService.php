@@ -13,12 +13,22 @@ class PurchaseService
 {
     public function create(array $data, ?int $userId = null): Purchase
     {
+        if (! empty($data['client_id'])) {
+            $existing = Purchase::with(['vendor', 'lines.product'])
+                ->where('client_id', $data['client_id'])
+                ->first();
+            if ($existing) {
+                return $existing;
+            }
+        }
+
         return DB::transaction(function () use ($data, $userId) {
             $subtotal = collect($data['lines'])->sum(fn ($line) => (float) $line['qty'] * (float) $line['unit_cost']);
             $paid = (float) ($data['paid_amount'] ?? 0);
             $balance = max(0, $subtotal - $paid);
 
             $purchase = Purchase::create([
+                'client_id' => $data['client_id'] ?? null,
                 'store_id' => $data['store_id'] ?? null,
                 'vendor_id' => $data['vendor_id'],
                 'grn_no' => 'GRN-PENDING',

@@ -27,6 +27,7 @@ class PurchaseController extends Controller
     public function store(Request $request, PurchaseService $service): JsonResponse
     {
         $data = $request->validate([
+            'client_id' => ['nullable', 'uuid'],
             'store_id' => ['nullable', 'integer', 'exists:stores,id'],
             'vendor_id' => ['required', 'integer', 'exists:vendors,id'],
             'payment_terms' => ['nullable', 'string', 'max:40'],

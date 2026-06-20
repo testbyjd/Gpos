@@ -18,6 +18,7 @@ import {
   type UserSettingsRow,
   type VendorRow,
 } from "@/lib/admin-api";
+import { getErrorMessage } from "@/lib/api";
 import { formatMoney } from "@/lib/utils";
 
 const inputCls =
@@ -32,7 +33,7 @@ export function CustomerFormModal({
   onClose: () => void;
   onSaved: (customer: CustomerRow) => void;
 }) {
-  useModalDismiss(onClose);
+  useModalDismiss(onClose, { escape: false });
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
@@ -52,8 +53,8 @@ export function CustomerFormModal({
       });
       onSaved(res.data);
       onClose();
-    } catch {
-      setError("Customer add nahi hua. Dobara try karo.");
+    } catch (err) {
+      setError(getErrorMessage(err, "Customer add nahi hua. Dobara try karo."));
     } finally {
       setSaving(false);
     }
@@ -79,7 +80,7 @@ export function VendorFormModal({
   onClose: () => void;
   onSaved: (vendor: VendorRow) => void;
 }) {
-  useModalDismiss(onClose);
+  useModalDismiss(onClose, { escape: false });
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
@@ -99,8 +100,8 @@ export function VendorFormModal({
       });
       onSaved(res.data);
       onClose();
-    } catch {
-      setError("Vendor add nahi hua.");
+    } catch (err) {
+      setError(getErrorMessage(err, "Vendor add nahi hua."));
     } finally {
       setSaving(false);
     }
@@ -131,7 +132,7 @@ export function UserFormModal({
   onClose: () => void;
   onSaved: (message: string) => void;
 }) {
-  useModalDismiss(onClose);
+  useModalDismiss(onClose, { escape: false });
   const isEdit = user != null;
   const [name, setName] = useState(user?.name ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
@@ -174,7 +175,7 @@ export function UserFormModal({
       }
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Save fail. Dobara try karo.");
+      setError(getErrorMessage(err, "Save fail. Dobara try karo."));
     } finally {
       setSaving(false);
     }
@@ -233,7 +234,7 @@ export function CategoryFormModal({
   onClose: () => void;
   onSaved: (category: CategoryRow) => void;
 }) {
-  useModalDismiss(onClose);
+  useModalDismiss(onClose, { escape: false });
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -247,8 +248,8 @@ export function CategoryFormModal({
       const res = await createCategory(name.trim());
       onSaved(res.data);
       onClose();
-    } catch {
-      setError("Category add nahi hui. Dobara try karo.");
+    } catch (err) {
+      setError(getErrorMessage(err, "Category add nahi hui. Dobara try karo."));
     } finally {
       setSaving(false);
     }
@@ -274,7 +275,7 @@ export function VendorPaymentModal({
   onClose: () => void;
   onSaved: (message: string) => void;
 }) {
-  useModalDismiss(onClose);
+  useModalDismiss(onClose, { escape: false });
   const open = invoices.filter((p) => Number(p.balance_amount) > 0);
   const [purchaseId, setPurchaseId] = useState(open[0] ? String(open[0].id) : "");
   const [amount, setAmount] = useState("");
@@ -294,8 +295,8 @@ export function VendorPaymentModal({
       const res = await recordVendorPayment(Number(purchaseId), amt, note.trim() || undefined);
       onSaved(res.message);
       onClose();
-    } catch {
-      setError("Payment record nahi hui.");
+    } catch (err) {
+      setError(getErrorMessage(err, "Payment record nahi hui."));
     } finally {
       setSaving(false);
     }

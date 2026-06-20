@@ -24,6 +24,7 @@ import {
   type VendorPaymentRow,
   type VendorRow,
 } from "@/lib/admin-api";
+import { getErrorMessage } from "@/lib/api";
 
 function fmtDate(value: string) {
   return new Date(value).toLocaleString("en-PK", {
@@ -112,20 +113,24 @@ export function CustomerDetailDrawer({
   customer,
   onClose,
   onChanged,
+  onNotify,
 }: {
   customer: CustomerRow;
   onClose: () => void;
   onChanged?: (customer: CustomerRow) => void;
+  onNotify?: (message: string) => void;
 }) {
   const [balance, setBalance] = useState(Number(customer.balance));
   const [entries, setEntries] = useState<LedgerEntry[]>([]);
   const [sales, setSales] = useState<SaleRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [showRepay, setShowRepay] = useState(false);
   const [openSaleId, setOpenSaleId] = useState<number | null>(null);
 
   async function refresh() {
     setLoading(true);
+    setLoadError(null);
     try {
       const [ledger, saleList] = await Promise.all([
         getCustomerLedger(customer.id),
@@ -135,6 +140,8 @@ export function CustomerDetailDrawer({
       setBalance(Number(ledger.customer.balance));
       setSales(saleList.data);
       onChanged?.(ledger.customer);
+    } catch (err) {
+      setLoadError(getErrorMessage(err, "Customer detail load nahi hui."));
     } finally {
       setLoading(false);
     }
@@ -151,6 +158,11 @@ export function CustomerDetailDrawer({
       subtitle={`${customer.phone ?? "No phone"} · ${customer.code ?? `C-${customer.id}`}`}
       onClose={onClose}
     >
+      {loadError && (
+        <p className="mb-3 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm font-bold text-danger">
+          {loadError}
+        </p>
+      )}
       <div className="grid grid-cols-2 gap-3">
         <SummaryCard label="Outstanding balance" value={formatMoney(balance)} tone={balance > 0 ? "warn" : "good"} />
         <div className="flex items-end">
@@ -200,11 +212,12 @@ export function CustomerDetailDrawer({
           onSaved={() => {
             setShowRepay(false);
             refresh();
+            onNotify?.("Wasooli record ho gayi.");
           }}
         />
       )}
       {openSaleId !== null && (
-        <SaleDetailModal saleId={openSaleId} onClose={() => setOpenSaleId(null)} onReturned={() => refresh()} />
+        <SaleDetailModal saleId={openSaleId} onClose={() => setOpenSaleId(null)} onReturned={() => { refresh(); onNotify?.("Sale return record ho gaya."); }} />
       )}
     </Drawer>
   );
@@ -221,7 +234,7 @@ function RepaymentModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  useModalDismiss(onClose);
+  useModalDismiss(onClose, { escape: false });
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -237,8 +250,8 @@ function RepaymentModal({
     try {
       await recordCustomerRepayment(customer.id, value, note.trim() || undefined);
       onSaved();
-    } catch {
-      setError("Wasooli fail. Dobara try karo.");
+    } catch (err) {
+      setError(getErrorMessage(err, "Wasooli fail. Dobara try karo."));
     } finally {
       setSaving(false);
     }
@@ -287,7 +300,7 @@ export function SaleDetailModal({
   onClose: () => void;
   onReturned?: () => void;
 }) {
-  useModalDismiss(onClose);
+  useModalDismiss(onClose, { escape: false });
   const [sale, setSale] = useState<SaleDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [showReturn, setShowReturn] = useState(false);
@@ -304,7 +317,7 @@ export function SaleDetailModal({
 
   return (
     <ModalPortal>
-      <div className="fixed inset-0 z-[110] overflow-y-auto bg-black/55 p-4 py-8 backdrop-blur-sm" onClick={onClose}>
+      <div className="fixed inset-0 z-[110] overflow-y-auto bg-black/55 p-4 py-8 backdrop-blur-sm">
         <div className="flex min-h-full items-center justify-center">
           <section className="w-full max-w-2xl rounded-xl border border-border/80 bg-card p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-4 flex items-start justify-between gap-3">
@@ -385,7 +398,7 @@ function SaleReturnModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  useModalDismiss(onClose);
+  useModalDismiss(onClose, { escape: false });
   const [qtys, setQtys] = useState<Record<number, string>>({});
   const [method, setMethod] = useState<"cash" | "khata">("cash");
   const [note, setNote] = useState("");
@@ -422,7 +435,7 @@ function SaleReturnModal({
       });
       onSaved();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Return fail. Dobara try karo.");
+      setError(getErrorMessage(err, "Return fail. Dobara try karo."));
     } finally {
       setSaving(false);
     }
@@ -512,22 +525,26 @@ export function VendorDetailDrawer({
   const [payments, setPayments] = useState<VendorPaymentRow[]>([]);
   const [returns, setReturns] = useState<PurchaseReturnRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [openPurchase, setOpenPurchase] = useState<PurchaseRow | null>(null);
 
   function load() {
-    return getVendorDetail(vendor.id).then((res) => {
-      setBalance(Number(res.vendor.balance));
-      setPurchases(res.purchases);
-      setPayments(res.payments);
-      setReturns(res.returns ?? []);
-    });
+    return getVendorDetail(vendor.id)
+      .then((res) => {
+        setBalance(Number(res.vendor.balance));
+        setPurchases(res.purchases);
+        setPayments(res.payments);
+        setReturns(res.returns ?? []);
+        setLoadError(null);
+      })
+      .catch((err) => {
+        setLoadError(getErrorMessage(err, "Vendor detail load nahi hui."));
+      });
   }
 
   useEffect(() => {
     let alive = true;
-    load()
-      .catch(() => {})
-      .finally(() => alive && setLoading(false));
+    load().finally(() => alive && setLoading(false));
     return () => {
       alive = false;
     };
@@ -538,6 +555,11 @@ export function VendorDetailDrawer({
 
   return (
     <Drawer title={vendor.name} subtitle={vendor.phone ?? "No phone"} onClose={onClose}>
+      {loadError && (
+        <p className="mb-3 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm font-bold text-danger">
+          {loadError}
+        </p>
+      )}
       <div className="grid grid-cols-2 gap-3">
         <SummaryCard
           label={balance < 0 ? "Vendor credit" : "Payable balance"}
@@ -615,13 +637,13 @@ export function PurchaseDetailModal({
   onClose: () => void;
   onReturned?: () => void;
 }) {
-  useModalDismiss(onClose);
+  useModalDismiss(onClose, { escape: false });
   const balance = Number(purchase.balance_amount);
   const [showReturn, setShowReturn] = useState(false);
 
   return (
     <ModalPortal>
-      <div className="fixed inset-0 z-[110] overflow-y-auto bg-black/55 p-4 py-8 backdrop-blur-sm" onClick={onClose}>
+      <div className="fixed inset-0 z-[110] overflow-y-auto bg-black/55 p-4 py-8 backdrop-blur-sm">
         <div className="flex min-h-full items-center justify-center">
           <section className="w-full max-w-2xl rounded-xl border border-border/80 bg-card p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-4 flex items-start justify-between gap-3">
@@ -684,7 +706,7 @@ function PurchaseReturnModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  useModalDismiss(onClose);
+  useModalDismiss(onClose, { escape: false });
   const [qtys, setQtys] = useState<Record<number, string>>({});
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -717,7 +739,7 @@ function PurchaseReturnModal({
       });
       onSaved();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Return fail. Dobara try karo.");
+      setError(getErrorMessage(err, "Return fail. Dobara try karo."));
     } finally {
       setSaving(false);
     }
