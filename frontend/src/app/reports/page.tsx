@@ -14,21 +14,50 @@ import {
   StatusPill,
 } from "@/features/admin/components/AdminShell";
 
-const RANGES = ["Today", "Yesterday", "This week", "This month"] as const;
+const RANGES = ["Today", "Yesterday", "This week", "This month", "Custom"] as const;
+type Range = (typeof RANGES)[number];
 type ReportsData = Awaited<ReturnType<typeof getReports>>;
 
+function ymd(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function presetDates(range: Range): { from: string; to: string } {
+  const today = new Date();
+  if (range === "Yesterday") {
+    const y = new Date(today);
+    y.setDate(y.getDate() - 1);
+    return { from: ymd(y), to: ymd(y) };
+  }
+  if (range === "This week") {
+    const s = new Date(today);
+    const offset = (s.getDay() + 6) % 7; // Monday start
+    s.setDate(s.getDate() - offset);
+    return { from: ymd(s), to: ymd(today) };
+  }
+  if (range === "This month") {
+    return { from: ymd(new Date(today.getFullYear(), today.getMonth(), 1)), to: ymd(today) };
+  }
+  return { from: ymd(today), to: ymd(today) };
+}
+
 export default function ReportsPage() {
-  const [range, setRange] = useState<(typeof RANGES)[number]>("Today");
+  const [range, setRange] = useState<Range>("Today");
+  const [customFrom, setCustomFrom] = useState(() => ymd(new Date()));
+  const [customTo, setCustomTo] = useState(() => ymd(new Date()));
   const [category, setCategory] = useState("All");
   const [data, setData] = useState<ReportsData | null>(null);
 
+  const { from, to } = range === "Custom" ? { from: customFrom, to: customTo } : presetDates(range);
+
   useEffect(() => {
+    if (!from || !to) return;
     let alive = true;
-    getReports().then((res) => alive && setData(res)).catch(() => alive && setData(null));
+    getReports(from, to).then((res) => alive && setData(res)).catch(() => alive && setData(null));
     return () => {
       alive = false;
     };
-  }, [range]);
+  }, [from, to]);
 
   const categories = useMemo(
     () => ["All", ...Array.from(new Set((data?.profit_by_category ?? []).map((r) => r.category)))],
@@ -43,7 +72,7 @@ export default function ReportsPage() {
   function exportCsv() {
     if (!data) return;
     const rows = [
-      ["Report", range],
+      ["Report", range, `${from} to ${to}`],
       ["Gross sales", data.gross_sales],
       ["Gross profit", data.gross_profit],
       ["Net receivable", data.net_receivable],
@@ -59,7 +88,7 @@ export default function ReportsPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `gpos-report-${range.toLowerCase().replace(/\s+/g, "-")}.csv`;
+    a.download = `gpos-report-${from}-to-${to}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -75,8 +104,8 @@ export default function ReportsPage() {
         </div>
       }
     >
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        {RANGES.map((label) => (
+      <div className="no-print mb-4 flex flex-wrap items-center gap-2">
+        {RANGES.filter((r) => r !== "Custom").map((label) => (
           <button
             key={label}
             onClick={() => setRange(label)}
@@ -88,12 +117,43 @@ export default function ReportsPage() {
             {label}
           </button>
         ))}
-        <button className="flex h-9 items-center gap-2 rounded-md border border-border/80 bg-card px-3 text-sm font-bold text-muted-foreground transition-colors hover:bg-card-hover hover:text-foreground">
+        <button
+          onClick={() => setRange("Custom")}
+          className={cn(
+            "flex h-9 items-center gap-2 rounded-md px-3 text-sm font-bold transition-colors",
+            range === "Custom" ? "bg-primary text-primary-foreground shadow-sm shadow-primary/20" : "border border-border/80 bg-card text-muted-foreground hover:bg-card-hover hover:text-foreground",
+          )}
+        >
           <CalendarDays className="h-4 w-4" />Custom
         </button>
+
+        {range === "Custom" && (
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="date"
+              value={customFrom}
+              max={customTo}
+              onChange={(e) => setCustomFrom(e.target.value)}
+              className="h-9 rounded-md border border-border bg-input px-3 text-sm font-semibold text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
+            />
+            <span className="text-sm text-muted-foreground">se</span>
+            <input
+              type="date"
+              value={customTo}
+              min={customFrom}
+              max={ymd(new Date())}
+              onChange={(e) => setCustomTo(e.target.value)}
+              className="h-9 rounded-md border border-border bg-input px-3 text-sm font-semibold text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
+            />
+          </div>
+        )}
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="print-area grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="col-span-full mb-2 hidden print:block">
+          <h2 className="text-xl font-black text-foreground">Gondal Traders — Report</h2>
+          <p className="text-sm text-muted-foreground">{from} se {to} · {range}</p>
+        </div>
         <div className="grid gap-4">
           <div className="grid gap-3 sm:grid-cols-3">
             {[

@@ -184,13 +184,15 @@ body {
   }
 }
 
-/* Print: only the receipt is sent to the thermal printer. */
+/* Print: only the receipt or the report area is sent to the printer. */
 @media print {
   body * {
     visibility: hidden !important;
   }
   .print-receipt,
-  .print-receipt * {
+  .print-receipt *,
+  .print-area,
+  .print-area * {
     visibility: visible !important;
   }
   .print-receipt {
@@ -199,6 +201,16 @@ body {
     top: 0;
     margin: 0 !important;
     box-shadow: none !important;
+  }
+  .print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 10mm;
+  }
+  .no-print {
+    display: none !important;
   }
   @page {
     margin: 0;

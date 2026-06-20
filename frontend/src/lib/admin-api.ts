@@ -250,15 +250,20 @@ export function getDashboard() {
   }>("/reports/dashboard");
 }
 
-export function getReports() {
+export function getReports(from?: string, to?: string) {
+  const params = new URLSearchParams();
+  if (from) params.set("from", from);
+  if (to) params.set("to", to);
+  const qs = params.toString();
   return apiFetch<{
+    range?: { from: string; to: string };
     gross_sales: number;
     gross_profit: number;
     net_receivable: number;
     payment_breakdown: Array<{ method: string; amount: number }>;
     profit_by_category: Array<{ category: string; sales: number; cost: number; profit: number; margin: number }>;
     top_items: Array<{ name: string; qty: number; unit: string; amount: number }>;
-  }>("/reports/summary");
+  }>(`/reports/summary${qs ? `?${qs}` : ""}`);
 }
 
 export interface ReceiptSettings {

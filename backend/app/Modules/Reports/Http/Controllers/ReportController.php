@@ -8,6 +8,7 @@ use App\Modules\Sales\Models\Sale;
 use App\Modules\Sales\Models\SaleLine;
 use App\Modules\Sales\Models\SalePayment;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 
 class ReportController extends Controller
@@ -45,13 +46,14 @@ class ReportController extends Controller
         ]);
     }
 
-    public function reports(): JsonResponse
+    public function reports(Request $request): JsonResponse
     {
-        $today = now()->startOfDay();
+        $from = $request->date('from')?->startOfDay() ?? now()->startOfDay();
+        $to = $request->date('to')?->endOfDay() ?? now()->endOfDay();
 
         $payments = SalePayment::query()
             ->selectRaw('method, SUM(amount) as amount')
-            ->whereHas('sale', fn ($q) => $q->where('sold_at', '>=', $today))
+            ->whereHas('sale', fn ($q) => $q->whereBetween('sold_at', [$from, $to]))
             ->groupBy('method')
             ->get()
             ->map(fn ($row) => ['method' => $row->method, 'amount' => (float) $row->amount]);
@@ -60,7 +62,7 @@ class ReportController extends Controller
             ->join('products', 'products.id', '=', 'sale_lines.product_id')
             ->leftJoin('categories', 'categories.id', '=', 'products.category_id')
             ->join('sales', 'sales.id', '=', 'sale_lines.sale_id')
-            ->where('sales.sold_at', '>=', $today)
+            ->whereBetween('sales.sold_at', [$from, $to])
             ->selectRaw("COALESCE(categories.name, 'Uncategorized') as category")
             ->selectRaw('SUM(sale_lines.line_total) as sales')
             ->selectRaw('SUM(sale_lines.cost_at_sale * sale_lines.qty) as cost')
@@ -78,7 +80,7 @@ class ReportController extends Controller
         $topItems = SaleLine::query()
             ->join('products', 'products.id', '=', 'sale_lines.product_id')
             ->join('sales', 'sales.id', '=', 'sale_lines.sale_id')
-            ->where('sales.sold_at', '>=', $today)
+            ->whereBetween('sales.sold_at', [$from, $to])
             ->selectRaw('products.name, products.unit, SUM(sale_lines.qty) as qty, SUM(sale_lines.line_total) as amount')
             ->groupBy('products.name', 'products.unit')
             ->orderByDesc('amount')
@@ -92,7 +94,8 @@ class ReportController extends Controller
             ]);
 
         return response()->json([
-            'gross_sales' => (float) Sale::where('sold_at', '>=', $today)->sum('total'),
+            'range' => ['from' => $from->toDateString(), 'to' => $to->toDateString()],
+            'gross_sales' => (float) Sale::whereBetween('sold_at', [$from, $to])->sum('total'),
             'gross_profit' => (float) $profit->sum('profit'),
             'net_receivable' => (float) Customer::sum('balance'),
             'payment_breakdown' => $payments,
