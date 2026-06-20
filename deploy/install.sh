@@ -96,8 +96,6 @@ echo "[install] Frontend (Next.js)…"
 cd "$APP_DIR/frontend"
 npm ci
 NEXT_PUBLIC_API_BASE_URL=/api/v1 npm run build
-cp -r .next/static .next/standalone/.next/static
-cp -r public .next/standalone/public
 chown -R www-data:www-data .next
 
 echo "[install] Nginx + systemd…"

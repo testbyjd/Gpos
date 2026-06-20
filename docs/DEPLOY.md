@@ -2,7 +2,13 @@
 
 Production server path: `/opt/gpos`
 
-## Safe deploy (normal update)
+## Quick update (server)
+
+```bash
+sudo bash /opt/gpos/deploy/update.sh
+```
+
+## Manual update
 
 ```bash
 cd /opt/gpos
@@ -18,9 +24,30 @@ php artisan route:cache
 # Frontend
 cd ../frontend
 npm ci
-npm run build
-# Restart Next.js / PM2 / systemd as per your setup
+NEXT_PUBLIC_API_BASE_URL=/api/v1 npm run build
+# postbuild auto-copies .next/static → standalone (required!)
+sudo chown -R www-data:www-data .next
+sudo systemctl restart gpos-frontend
 ```
+
+## Stuck on "Checking session..." + console 500 on `/_next/static/`
+
+Next.js **standalone** build does not bundle static JS/CSS. Agar sirf `npm run build` chala aur **static copy + service restart** miss ho gaya:
+
+- HTML load hoti hai ("Checking session...")
+- JS chunks **500** dete hain → app kabhi hydrate nahi hoti
+
+**Fix on server:**
+
+```bash
+cd /opt/gpos/frontend
+NEXT_PUBLIC_API_BASE_URL=/api/v1 npm run build
+# postbuild copies static automatically (since UX trust batch)
+sudo chown -R www-data:www-data .next
+sudo systemctl restart gpos-frontend
+```
+
+Verify: browser DevTools → Network → `/_next/static/chunks/*.js` should be **200**, not 500.
 
 ## NEVER on production
 
@@ -29,21 +56,12 @@ php artisan migrate:fresh   # ❌ Sab data delete — sirf local dev
 php artisan db:seed         # ❌ Prod pe sirf jab naya empty DB ho
 ```
 
-`migrate:fresh` se purchases, sales, khata — sab wipe ho jata hai. Agar count 0 dikhe aur data tha, yeh common reason hai.
-
-## Required migration (UX trust batch)
-
-```bash
-php artisan migrate --force
-# Adds purchases.client_id for duplicate-safe posting
-```
-
 ## Verify after deploy
 
-1. Login owner se — dashboard numbers load hon
-2. Purchase post karo — list mein GRN dikhe
-3. POS bill — "Sale Completed" ke baad invoice # confirm karo
-4. Offline badge aaye to checkout band hona chahiye
+1. `/pos/login` — Sign in form dikhe (not endless "Checking session...")
+2. Login owner se — dashboard numbers load hon
+3. Purchase post karo — list mein GRN dikhe
+4. POS bill — "Sale Completed" ke baad invoice # confirm karo
 
 ## Local dev (fresh DB OK)
 
@@ -51,5 +69,3 @@ php artisan migrate --force
 cd backend
 php artisan migrate:fresh --seed
 ```
-
-Default seed logins: see `backend/database/seeders` or project README.
