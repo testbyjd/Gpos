@@ -416,8 +416,8 @@ function SaleReturnModal({
         })),
       });
       onSaved();
-    } catch {
-      setError("Return fail. Dobara try karo.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Return fail. Dobara try karo.");
     } finally {
       setSaving(false);
     }
@@ -547,7 +547,7 @@ export function VendorDetailDrawer({
           minWidth="460px"
           columns={["GRN", "Date", "Total", "Balance"]}
           emptyLabel="Koi purchase nahi."
-          onRowClick={(i) => setOpenPurchase(purchases[i])}
+          onRowClick={(i) => setOpenPurchase({ ...purchases[i], vendor })}
           rows={purchases.map((p) => [
             <span key="grn" className="font-bold text-primary">{p.grn_no}</span>,
             <span key="date" className="text-muted-foreground">{new Date(p.received_at).toLocaleDateString("en-PK")}</span>,
@@ -708,8 +708,8 @@ function PurchaseReturnModal({
         })),
       });
       onSaved();
-    } catch {
-      setError("Return fail. Dobara try karo.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Return fail. Dobara try karo.");
     } finally {
       setSaving(false);
     }
