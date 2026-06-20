@@ -151,7 +151,7 @@ export interface SaleDetail extends SaleRow {
     qty: string | number;
     unit_price: string | number;
     line_total: string | number;
-    product?: { id: number; name: string; barcode: string | null } | null;
+    product?: { id: number; name: string; barcode: string | null; stock_qty?: string | number; unit?: string } | null;
   }>;
 }
 

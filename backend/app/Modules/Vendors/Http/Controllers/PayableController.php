@@ -17,7 +17,7 @@ class PayableController extends Controller
         return response()->json([
             'total_payable' => (float) Vendor::sum('balance'),
             'vendors' => Vendor::where('balance', '>', 0)->orderByDesc('balance')->get(),
-            'open_invoices' => Purchase::with(['vendor', 'lines.product:id,name,barcode'])->where('balance_amount', '>', 0)->latest('received_at')->get(),
+            'open_invoices' => Purchase::with(['vendor', 'lines.product:id,name,barcode,stock_qty,unit'])->where('balance_amount', '>', 0)->latest('received_at')->get(),
         ]);
     }
 

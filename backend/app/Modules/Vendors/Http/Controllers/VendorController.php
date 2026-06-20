@@ -39,7 +39,7 @@ class VendorController extends Controller
         return response()->json([
             'vendor' => $vendor,
             'purchases' => $vendor->purchases()
-                ->with('lines.product:id,name,barcode')
+                ->with('lines.product:id,name,barcode,stock_qty,unit')
                 ->latest('received_at')
                 ->get(),
             'payments' => $vendor->payments()

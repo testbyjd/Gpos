@@ -35,6 +35,11 @@ function fmtDate(value: string) {
   });
 }
 
+function stockLabel(product?: { stock_qty?: string | number | null; unit?: string } | null) {
+  if (!product || product.stock_qty === undefined || product.stock_qty === null) return null;
+  return `${Number(product.stock_qty)}${product.unit ? ` ${product.unit}` : ""}`;
+}
+
 function ledgerLabel(type: string) {
   if (type === "sale_credit") return "Udhaar (sale)";
   if (type === "repayment") return "Wasooli";
@@ -443,7 +448,10 @@ function SaleReturnModal({
                 <div key={l.id} className="flex items-center gap-3 rounded-md border border-border/70 bg-background px-3 py-2">
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-bold text-foreground">{l.product?.name ?? "Product"}</p>
-                    <p className="text-xs text-muted-foreground">Bika: {Number(l.qty)} · {formatMoney(Number(l.unit_price))}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Bika: {Number(l.qty)} · {formatMoney(Number(l.unit_price))}
+                      {stockLabel(l.product) && <> · <span className="font-semibold text-foreground">Stock: {stockLabel(l.product)}</span></>}
+                    </p>
                   </div>
                   <input
                     type="number"
@@ -735,7 +743,10 @@ function PurchaseReturnModal({
                 <div key={l.id} className="flex items-center gap-3 rounded-md border border-border/70 bg-background px-3 py-2">
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-bold text-foreground">{l.product?.name ?? "Product"}</p>
-                    <p className="text-xs text-muted-foreground">Aaya: {Number(l.qty)} · {formatMoney(Number(l.unit_cost))}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Aaya: {Number(l.qty)} · {formatMoney(Number(l.unit_cost))}
+                      {stockLabel(l.product) && <> · <span className="font-semibold text-foreground">Stock: {stockLabel(l.product)}</span></>}
+                    </p>
                   </div>
                   <input
                     type="number"
