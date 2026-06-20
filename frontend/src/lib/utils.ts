@@ -17,6 +17,15 @@ export function formatMoney(amount: number): string {
   return PKR.format(amount).replace("PKR", "Rs").trim();
 }
 
+/**
+ * Format a running balance. Negative means a credit/advance (the other party
+ * owes us), shown as "Rs X Cr".
+ */
+export function formatSignedBalance(amount: number): string {
+  if (amount < 0) return `${formatMoney(Math.abs(amount))} Cr`;
+  return formatMoney(amount);
+}
+
 /** Format a quantity respecting fractional units (kg, g, etc.). */
 export function formatQty(qty: number, unit: string): string {
   const isWhole = Number.isInteger(qty);

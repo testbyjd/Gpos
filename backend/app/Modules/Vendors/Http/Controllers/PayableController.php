@@ -43,7 +43,7 @@ class PayableController extends Controller
             $purchase->save();
 
             $vendor = Vendor::lockForUpdate()->findOrFail($purchase->vendor_id);
-            $vendor->balance = max(0, (float) bcsub((string) $vendor->balance, (string) $amount, 2));
+            $vendor->balance = (float) bcsub((string) $vendor->balance, (string) $amount, 2);
             $vendor->save();
 
             VendorPayment::create([

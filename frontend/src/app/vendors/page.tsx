@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Plus, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
-import { formatMoney } from "@/lib/utils";
+import { formatSignedBalance } from "@/lib/utils";
 import { listVendors, type VendorRow } from "@/lib/admin-api";
 import { VendorFormModal } from "@/features/admin/components/AdminActionModals";
 import { VendorDetailDrawer } from "@/features/admin/components/DetailDrawers";
@@ -46,8 +46,8 @@ export default function VendorsPage() {
             rows={filtered.map((vendor) => [
               <span key="name" className="font-bold text-foreground">{vendor.name}</span>,
               vendor.phone ?? "—",
-              <span key="balance" className="font-black tabular-nums text-foreground">{formatMoney(Number(vendor.balance))}</span>,
-              <StatusPill key="state" tone={Number(vendor.balance) > 0 ? "warn" : "good"}>{Number(vendor.balance) > 0 ? "Payable" : "Clear"}</StatusPill>,
+              <span key="balance" className="font-black tabular-nums text-foreground">{formatSignedBalance(Number(vendor.balance))}</span>,
+              <StatusPill key="state" tone={Number(vendor.balance) > 0 ? "warn" : Number(vendor.balance) < 0 ? "info" : "good"}>{Number(vendor.balance) > 0 ? "Payable" : Number(vendor.balance) < 0 ? "Credit" : "Clear"}</StatusPill>,
             ])}
           />
         </PagePanel>

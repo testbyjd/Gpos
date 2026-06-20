@@ -5,7 +5,7 @@ import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ModalPortal } from "@/components/ui/modal-portal";
 import { useModalDismiss } from "@/lib/hooks/useModalDismiss";
-import { formatMoney } from "@/lib/utils";
+import { formatMoney, formatSignedBalance } from "@/lib/utils";
 import { DataTable, StatusPill } from "@/features/admin/components/AdminShell";
 import {
   createPurchaseReturn,
@@ -531,7 +531,11 @@ export function VendorDetailDrawer({
   return (
     <Drawer title={vendor.name} subtitle={vendor.phone ?? "No phone"} onClose={onClose}>
       <div className="grid grid-cols-2 gap-3">
-        <SummaryCard label="Payable balance" value={formatMoney(balance)} tone={balance > 0 ? "warn" : "good"} />
+        <SummaryCard
+          label={balance < 0 ? "Vendor credit" : "Payable balance"}
+          value={formatSignedBalance(balance)}
+          tone={balance > 0 ? "warn" : "good"}
+        />
         <SummaryCard label="Total paid" value={formatMoney(totalPaid)} />
       </div>
 
