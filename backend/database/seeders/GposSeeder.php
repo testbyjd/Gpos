@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\User;
+use App\Modules\Inventory\Models\Category;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -65,6 +66,21 @@ class GposSeeder extends Seeder
                     'is_active' => true,
                 ],
             );
+        }
+
+        foreach ([
+            'Grocery',
+            'Dairy',
+            'Beverages',
+            'Snacks & Biscuits',
+            'Rice & Pulses',
+            'Spices & Masala',
+            'Cooking Oil',
+            'Personal Care',
+            'Household & Cleaning',
+            'Frozen',
+        ] as $name) {
+            Category::create(['store_id' => $storeId, 'name' => $name]);
         }
     }
 }

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ModalPortal } from "@/components/ui/modal-portal";
 import { useModalDismiss } from "@/lib/hooks/useModalDismiss";
 import {
+  createCategory,
   createProduct,
   updateProduct,
   type CategoryRow,
@@ -25,9 +26,10 @@ interface Props {
   categories: CategoryRow[];
   onClose: () => void;
   onSaved: (product: ProductRow) => void;
+  onCategoryAdded?: (category: CategoryRow) => void;
 }
 
-export function ProductFormModal({ product, categories, onClose, onSaved }: Props) {
+export function ProductFormModal({ product, categories, onClose, onSaved, onCategoryAdded }: Props) {
   useModalDismiss(onClose);
   const barcodeRef = useRef<HTMLInputElement>(null);
   const isEdit = product !== null;
@@ -44,6 +46,14 @@ export function ProductFormModal({ product, categories, onClose, onSaved }: Prop
   const [expiryDate, setExpiryDate] = useState(product?.expiry_date ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [localCategories, setLocalCategories] = useState(categories);
+  const [showNewCategory, setShowNewCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [addingCategory, setAddingCategory] = useState(false);
+
+  useEffect(() => {
+    setLocalCategories(categories);
+  }, [categories]);
 
   useEffect(() => {
     barcodeRef.current?.focus();
@@ -88,6 +98,25 @@ export function ProductFormModal({ product, categories, onClose, onSaved }: Prop
       setError("Save failed. Barcode duplicate ho sakta hai — dobara check karo.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function addCategory() {
+    const trimmed = newCategoryName.trim();
+    if (!trimmed) return setError("Category name likho.");
+    setAddingCategory(true);
+    setError(null);
+    try {
+      const res = await createCategory(trimmed);
+      setLocalCategories((prev) => [...prev, res.data].sort((a, b) => a.name.localeCompare(b.name)));
+      setCategoryId(String(res.data.id));
+      setNewCategoryName("");
+      setShowNewCategory(false);
+      onCategoryAdded?.(res.data);
+    } catch {
+      setError("Category add nahi hui.");
+    } finally {
+      setAddingCategory(false);
     }
   }
 
@@ -158,12 +187,38 @@ export function ProductFormModal({ product, categories, onClose, onSaved }: Prop
                 className={inputCls}
               >
                 <option value="">Uncategorized</option>
-                {categories.map((c) => (
+                {localCategories.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
                   </option>
                 ))}
               </select>
+              {!showNewCategory ? (
+                <button
+                  type="button"
+                  onClick={() => setShowNewCategory(true)}
+                  className="mt-1.5 text-xs font-bold text-primary hover:underline"
+                >
+                  + New category
+                </button>
+              ) : (
+                <div className="mt-2 flex gap-2">
+                  <input
+                    type="text"
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    placeholder="Category name"
+                    className={inputCls}
+                    autoFocus
+                  />
+                  <Button type="button" size="sm" onClick={addCategory} disabled={addingCategory}>
+                    {addingCategory ? "..." : "Add"}
+                  </Button>
+                  <Button type="button" size="sm" variant="secondary" onClick={() => setShowNewCategory(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              )}
             </label>
           </div>
 

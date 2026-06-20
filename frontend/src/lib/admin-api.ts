@@ -70,6 +70,13 @@ export function listCategories() {
   return apiFetch<{ data: CategoryRow[] }>("/inventory/categories");
 }
 
+export function createCategory(name: string) {
+  return apiFetch<{ data: CategoryRow }>("/inventory/categories", {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+}
+
 export function createProduct(data: ProductInput) {
   return apiFetch<{ data: ProductRow }>("/inventory/products", {
     method: "POST",

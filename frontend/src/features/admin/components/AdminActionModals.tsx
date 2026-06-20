@@ -6,10 +6,12 @@ import { Button } from "@/components/ui/button";
 import { ModalPortal } from "@/components/ui/modal-portal";
 import { useModalDismiss } from "@/lib/hooks/useModalDismiss";
 import {
+  createCategory,
   createCustomer,
   createUser,
   createVendor,
   recordVendorPayment,
+  type CategoryRow,
   type CustomerRow,
   type PurchaseRow,
   type VendorRow,
@@ -171,6 +173,45 @@ export function UserFormModal({
         <Field label="PIN (optional)" value={pin} onChange={setPin} placeholder="1234" />
         {error && <ErrorBox message={error} />}
         <ModalActions onClose={onClose} saving={saving} submitLabel="Add user" />
+      </form>
+    </ModalShell>
+  );
+}
+
+export function CategoryFormModal({
+  onClose,
+  onSaved,
+}: {
+  onClose: () => void;
+  onSaved: (category: CategoryRow) => void;
+}) {
+  useModalDismiss(onClose);
+  const [name, setName] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) return setError("Category name zaroori hai.");
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await createCategory(name.trim());
+      onSaved(res.data);
+      onClose();
+    } catch {
+      setError("Category add nahi hui. Dobara try karo.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <ModalShell title="Add category" subtitle="Product grouping ke liye nayi category" onClose={onClose}>
+      <form onSubmit={onSubmit} className="space-y-3">
+        <Field label="Category name" value={name} onChange={setName} required placeholder="e.g. Bakery" />
+        {error && <ErrorBox message={error} />}
+        <ModalActions onClose={onClose} saving={saving} submitLabel="Add category" />
       </form>
     </ModalShell>
   );

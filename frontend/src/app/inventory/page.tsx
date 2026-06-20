@@ -8,6 +8,7 @@ import { FilterChips } from "@/components/ui/filter-chips";
 import { StatCard } from "@/components/ui/stat-card";
 import { formatMoney } from "@/lib/utils";
 import { deleteProduct, listCategories, listProducts, type CategoryRow, type ProductRow } from "@/lib/admin-api";
+import { CategoryFormModal } from "@/features/admin/components/AdminActionModals";
 import { ProductFormModal } from "@/features/admin/components/ProductFormModal";
 import {
   AdminShell,
@@ -43,6 +44,7 @@ export default function InventoryPage() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [formProduct, setFormProduct] = useState<ProductRow | null | "new">(null);
+  const [showAddCategory, setShowAddCategory] = useState(false);
 
   const loadProducts = useCallback(() => {
     listProducts()
@@ -56,6 +58,11 @@ export default function InventoryPage() {
       .then((res) => setCategories(res.data))
       .catch(() => setCategories([]));
   }, [loadProducts]);
+
+  function handleCategorySaved(category: CategoryRow) {
+    setCategories((prev) => [...prev, category].sort((a, b) => a.name.localeCompare(b.name)));
+    setNotice(`"${category.name}" category add ho gayi.`);
+  }
 
   function handleSaved(product: ProductRow) {
     setProducts((prev) => {
@@ -84,7 +91,10 @@ export default function InventoryPage() {
     }
   }
 
-  const filterCategories = useMemo(() => ["All", ...Array.from(new Set(products.map((p) => p.category ?? "Uncategorized")))], [products]);
+  const filterCategories = useMemo(
+    () => ["All", ...categories.map((c) => c.name)],
+    [categories],
+  );
   const expiringSoon = useMemo(
     () => products.filter((p) => {
       const days = daysUntil(p.expiry_date);
@@ -117,6 +127,7 @@ export default function InventoryPage() {
       actions={
         <div className="hidden gap-2 sm:flex">
           <Button variant="secondary" size="sm" onClick={() => setNotice("CSV import agle update mein aayega.")}><Upload className="h-4 w-4" />Import</Button>
+          <Button variant="secondary" size="sm" onClick={() => setShowAddCategory(true)}><Plus className="h-4 w-4" />Category</Button>
           <Button size="sm" onClick={() => setFormProduct("new")}><Plus className="h-4 w-4" />Product</Button>
         </div>
       }
@@ -204,6 +215,14 @@ export default function InventoryPage() {
           categories={categories}
           onClose={() => setFormProduct(null)}
           onSaved={handleSaved}
+          onCategoryAdded={handleCategorySaved}
+        />
+      )}
+
+      {showAddCategory && (
+        <CategoryFormModal
+          onClose={() => setShowAddCategory(false)}
+          onSaved={handleCategorySaved}
         />
       )}
     </AdminShell>
