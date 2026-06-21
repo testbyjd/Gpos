@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, Banknote, Clock3, CreditCard, Loader2, ReceiptText, TrendingUp } from "lucide-react";
 import { formatMoney } from "@/lib/utils";
+import { formatPkTime } from "@/lib/datetime";
 import { getDashboard } from "@/lib/admin-api";
 import { getErrorMessage } from "@/lib/api";
 import { SaleDetailModal } from "@/features/admin/components/DetailDrawers";
@@ -109,7 +110,7 @@ export default function DashboardPage() {
                 <span key="amt" className="font-bold tabular-nums text-foreground">{formatMoney(row.amount)}</span>,
                 <StatusPill key="pay" tone={row.payment.includes("khata") ? "warn" : "neutral"}>{row.payment || "—"}</StatusPill>,
                 <span key="time" className="text-muted-foreground">
-                  {new Date(row.sold_at).toLocaleString("en-PK", { hour: "2-digit", minute: "2-digit" })}
+                  {formatPkTime(row.sold_at)}
                 </span>,
               ])}
             />

@@ -11,7 +11,6 @@ use App\Modules\Inventory\Services\StockService;
 use App\Modules\Sales\Models\Sale;
 use App\Modules\Sales\Models\SaleLine;
 use App\Modules\Sales\Models\SalePayment;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use RuntimeException;
@@ -51,7 +50,7 @@ class SaleSyncService
                 'subtotal' => $payload['subtotal'],
                 'discount' => $payload['discount'] ?? 0,
                 'total' => $payload['total'],
-                'sold_at' => Carbon::parse($payload['sold_at']),
+                'sold_at' => now(),
                 'synced_at' => now(),
             ]);
 

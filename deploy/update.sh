@@ -13,6 +13,23 @@ fi
 cd "$APP_DIR"
 git pull
 
+echo "[update] Timezone (Pakistan / Karachi)…"
+if command -v timedatectl >/dev/null 2>&1; then
+  timedatectl set-timezone Asia/Karachi
+  echo "[update] OS timezone: $(timedatectl show -p Timezone --value)"
+else
+  echo "[update] timedatectl not found — set TZ=Asia/Karachi manually if needed." >&2
+fi
+ENV_FILE="$APP_DIR/backend/.env"
+if [[ -f "$ENV_FILE" ]]; then
+  if grep -q '^APP_TIMEZONE=' "$ENV_FILE"; then
+    sed -i 's/^APP_TIMEZONE=.*/APP_TIMEZONE=Asia\/Karachi/' "$ENV_FILE"
+  else
+    echo 'APP_TIMEZONE=Asia/Karachi' >> "$ENV_FILE"
+  fi
+  echo "[update] Laravel APP_TIMEZONE=Asia/Karachi"
+fi
+
 echo "[update] Backend…"
 cd "$APP_DIR/backend"
 export COMPOSER_ALLOW_SUPERUSER=1
@@ -20,6 +37,7 @@ composer install --no-dev --optimize-autoloader --no-interaction
 php artisan migrate --force
 php artisan config:cache
 php artisan route:cache
+systemctl reload php8.3-fpm 2>/dev/null || true
 
 echo "[update] Frontend…"
 cd "$APP_DIR/frontend"

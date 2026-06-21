@@ -1,5 +1,6 @@
 import type { ReceiptData } from "@/features/admin/components/ReceiptPreview";
 import type { SaleDetail } from "@/lib/admin-api";
+import { formatPkDateTime } from "@/lib/datetime";
 
 const METHOD_LABEL: Record<string, string> = {
   cash: "Cash",
@@ -17,7 +18,7 @@ export function saleToReceiptData(sale: SaleDetail): ReceiptData {
 
   return {
     invoice_no: sale.invoice_no,
-    date: new Date(sale.sold_at).toLocaleString("en-PK", {
+    date: formatPkDateTime(sale.sold_at, {
       day: "2-digit",
       month: "short",
       year: "numeric",

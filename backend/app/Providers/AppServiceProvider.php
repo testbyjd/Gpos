@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use Illuminate\Support\Facades\Date;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -19,6 +20,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        Date::serializeUsing(function (\DateTimeInterface $date): string {
+            return Date::instance($date)
+                ->timezone(config('app.timezone'))
+                ->format('Y-m-d\TH:i:sP');
+        });
     }
 }

@@ -7,6 +7,7 @@ import { AppToast, useAppToast } from "@/components/ui/app-toast";
 import { FilterChips } from "@/components/ui/filter-chips";
 import { SearchInput } from "@/components/ui/search-input";
 import { formatMoney } from "@/lib/utils";
+import { formatPkDateTime, pkYmd } from "@/lib/datetime";
 import { getErrorMessage } from "@/lib/api";
 import { listSales, type SaleRow } from "@/lib/admin-api";
 import { SaleDetailModal } from "@/features/admin/components/DetailDrawers";
@@ -22,32 +23,29 @@ import {
 const RANGES = ["Today", "Yesterday", "This week", "This month", "All"] as const;
 type Range = (typeof RANGES)[number];
 
-function ymd(d: Date) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
 function presetDates(range: Range): { from?: string; to?: string } {
   const today = new Date();
   if (range === "All") return {};
   if (range === "Yesterday") {
     const y = new Date(today);
     y.setDate(y.getDate() - 1);
-    return { from: ymd(y), to: ymd(y) };
+    return { from: pkYmd(y), to: pkYmd(y) };
   }
   if (range === "This week") {
     const s = new Date(today);
     const offset = (s.getDay() + 6) % 7;
     s.setDate(s.getDate() - offset);
-    return { from: ymd(s), to: ymd(today) };
+    return { from: pkYmd(s), to: pkYmd(today) };
   }
   if (range === "This month") {
-    return { from: ymd(new Date(today.getFullYear(), today.getMonth(), 1)), to: ymd(today) };
+    const parts = pkYmd(today).split("-");
+    return { from: `${parts[0]}-${parts[1]}-01`, to: pkYmd(today) };
   }
-  return { from: ymd(today), to: ymd(today) };
+  return { from: pkYmd(today), to: pkYmd(today) };
 }
 
 function fmtSoldAt(iso: string) {
-  return new Date(iso).toLocaleString("en-PK", {
+  return formatPkDateTime(iso, {
     day: "numeric",
     month: "short",
     hour: "2-digit",

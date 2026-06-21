@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ModalPortal } from "@/components/ui/modal-portal";
 import { useModalDismiss } from "@/lib/hooks/useModalDismiss";
 import { formatMoney, formatSignedBalance } from "@/lib/utils";
+import { formatPkDateTime } from "@/lib/datetime";
 import { DataTable, StatusPill } from "@/features/admin/components/AdminShell";
 import { SaleReceiptPrint } from "@/features/sales/components/SaleReceiptPrint";
 import {
@@ -30,7 +31,7 @@ import {
 import { getErrorMessage } from "@/lib/api";
 
 function fmtDate(value: string) {
-  return new Date(value).toLocaleString("en-PK", {
+  return formatPkDateTime(value, {
     day: "2-digit",
     month: "short",
     year: "numeric",
