@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useState, type ReactNode } from "react";
-import { PackagePlus, X } from "lucide-react";
+import { PackagePlus, Printer, RotateCcw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ModalPortal } from "@/components/ui/modal-portal";
 import { useModalDismiss } from "@/lib/hooks/useModalDismiss";
 import { formatMoney, formatSignedBalance } from "@/lib/utils";
 import { DataTable, StatusPill } from "@/features/admin/components/AdminShell";
+import { SaleReceiptPrint } from "@/features/sales/components/SaleReceiptPrint";
 import {
   createPurchaseReturn,
   createSaleReturn,
@@ -136,7 +137,7 @@ export function CustomerDetailDrawer({
     try {
       const [ledger, saleList] = await Promise.all([
         getCustomerLedger(customer.id),
-        listSales(customer.id),
+        listSales({ customerId: customer.id }),
       ]);
       setEntries(ledger.entries);
       setBalance(Number(ledger.customer.balance));
@@ -297,25 +298,32 @@ export function SaleDetailModal({
   saleId,
   onClose,
   onReturned,
+  initialView,
 }: {
   saleId: number;
   onClose: () => void;
   onReturned?: () => void;
+  /** Open return or print flow as soon as the bill loads. */
+  initialView?: "return" | "print";
 }) {
   useModalDismiss(onClose, { escape: false });
   const [sale, setSale] = useState<SaleDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showReturn, setShowReturn] = useState(false);
+  const [showReturn, setShowReturn] = useState(initialView === "return");
+  const [showPrint, setShowPrint] = useState(initialView === "print");
 
   useEffect(() => {
     let alive = true;
+    setLoading(true);
+    setShowReturn(initialView === "return");
+    setShowPrint(initialView === "print");
     getSale(saleId)
       .then((res) => alive && setSale(res.data))
       .finally(() => alive && setLoading(false));
     return () => {
       alive = false;
     };
-  }, [saleId]);
+  }, [saleId, initialView]);
 
   return (
     <ModalPortal>
@@ -331,9 +339,16 @@ export function SaleDetailModal({
               </div>
               <div className="flex items-center gap-2">
                 {sale && (
-                  <Button size="sm" variant="secondary" onClick={() => setShowReturn(true)}>
-                    Return / Refund
-                  </Button>
+                  <>
+                    <Button size="sm" variant="secondary" onClick={() => setShowPrint(true)}>
+                      <Printer className="h-4 w-4" />
+                      Print receipt
+                    </Button>
+                    <Button size="sm" variant="secondary" onClick={() => setShowReturn(true)}>
+                      <RotateCcw className="h-4 w-4" />
+                      Customer return
+                    </Button>
+                  </>
                 )}
                 <button type="button" onClick={onClose} aria-label="Close" className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted">
                   <X className="h-4 w-4" />
@@ -384,6 +399,10 @@ export function SaleDetailModal({
                 }}
               />
             )}
+
+            {showPrint && sale && (
+              <SaleReceiptPrint sale={sale} onClose={() => setShowPrint(false)} />
+            )}
           </section>
         </div>
       </div>
@@ -408,6 +427,11 @@ function SaleReturnModal({
   const [saving, setSaving] = useState(false);
 
   const hasCustomer = !!sale.customer_id;
+  const hadKhata = (sale.payments ?? []).some((p) => p.method === "khata");
+
+  useEffect(() => {
+    if (hadKhata && hasCustomer) setMethod("khata");
+  }, [hadKhata, hasCustomer]);
 
   const selectedLines = sale.lines
     .map((l) => ({ line: l, qty: Number(qtys[l.id] ?? 0) }))

@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { AlertTriangle, Banknote, Clock3, CreditCard, Loader2, ReceiptText, TrendingUp } from "lucide-react";
 import { formatMoney } from "@/lib/utils";
 import { getDashboard } from "@/lib/admin-api";
 import { getErrorMessage } from "@/lib/api";
+import { SaleDetailModal } from "@/features/admin/components/DetailDrawers";
 import {
   AdminShell,
   DataTable,
@@ -22,6 +24,7 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [openSaleId, setOpenSaleId] = useState<number | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -85,54 +88,79 @@ export default function DashboardPage() {
             ))}
           </div>
 
+          <PagePanel className="mt-4">
+            <PanelHeader
+              title="Aaj ki sales"
+              meta={`${data.sales_today_count} bills · ${formatMoney(data.sales_today_total)} total`}
+              actions={
+                <Link href="/sales" className="text-xs font-bold text-primary hover:underline">
+                  Saari dekho / print →
+                </Link>
+              }
+            />
+            <DataTable
+              minWidth="560px"
+              columns={["Invoice", "Customer", "Amount", "Payment", "Time"]}
+              emptyLabel="Aaj abhi koi sale nahi."
+              onRowClick={(i) => setOpenSaleId(data.sales_today[i].id)}
+              rows={data.sales_today.map((row) => [
+                <span key="inv" className="font-bold text-primary">{row.invoice_no}</span>,
+                <span key="cust" className="font-semibold text-foreground">{row.customer}</span>,
+                <span key="amt" className="font-bold tabular-nums text-foreground">{formatMoney(row.amount)}</span>,
+                <StatusPill key="pay" tone={row.payment.includes("khata") ? "warn" : "neutral"}>{row.payment || "—"}</StatusPill>,
+                <span key="time" className="text-muted-foreground">
+                  {new Date(row.sold_at).toLocaleString("en-PK", { hour: "2-digit", minute: "2-digit" })}
+                </span>,
+              ])}
+            />
+          </PagePanel>
+
           <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
             <PagePanel>
-              <PanelHeader title="Recent sales" meta="Live register activity" actions={<StatusPill tone="good">Online sync</StatusPill>} />
+              <PanelHeader title="Low stock" meta="Items nearest reorder point" actions={<AlertTriangle className="h-4 w-4 text-warning" />} />
               <DataTable
-                columns={["Invoice", "Customer", "Amount", "Payment", "Time"]}
-                rows={data.recent_sales.map((row) => [
-                  <span key="invoice" className="font-bold text-foreground">{row.invoice_no}</span>,
-                  row.customer,
-                  <span key="amount" className="font-bold tabular-nums text-foreground">{formatMoney(row.amount)}</span>,
-                  <StatusPill key="payment" tone={row.payment.includes("khata") ? "warn" : "neutral"}>{row.payment || "—"}</StatusPill>,
-                  row.time,
+                columns={["Product", "Threshold", "Stock", "State"]}
+                rows={data.low_stock.map((row) => [
+                  <span key="product" className="font-bold text-foreground">{row.name}</span>,
+                  `${Number(row.low_stock_threshold)} ${row.unit}`,
+                  `${Number(row.stock_qty)} ${row.unit}`,
+                  <StatusPill key="state" tone="warn">Reorder</StatusPill>,
                 ])}
+                minWidth="460px"
               />
             </PagePanel>
 
-            <div className="grid gap-4">
-              <PagePanel>
-                <PanelHeader title="Low stock" meta="Items nearest reorder point" actions={<AlertTriangle className="h-4 w-4 text-warning" />} />
-                <DataTable
-                  columns={["Product", "Threshold", "Stock", "State"]}
-                  rows={data.low_stock.map((row) => [
-                    <span key="product" className="font-bold text-foreground">{row.name}</span>,
-                    `${Number(row.low_stock_threshold)} ${row.unit}`,
-                    `${Number(row.stock_qty)} ${row.unit}`,
-                    <StatusPill key="state" tone="warn">Reorder</StatusPill>,
-                  ])}
-                  minWidth="460px"
-                />
-              </PagePanel>
-
-              <PagePanel className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10 text-accent ring-1 ring-accent/20">
-                    <Clock3 className="h-5 w-5" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Total khata receivable
-                    </p>
-                    <p className="text-xl font-black tabular-nums text-foreground">
-                      {formatMoney(data.receivable_total)}
-                    </p>
-                  </div>
+            <PagePanel className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10 text-accent ring-1 ring-accent/20">
+                  <Clock3 className="h-5 w-5" />
                 </div>
-              </PagePanel>
-            </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Total khata receivable
+                  </p>
+                  <p className="text-xl font-black tabular-nums text-foreground">
+                    {formatMoney(data.receivable_total)}
+                  </p>
+                  <Link href="/khata" className="mt-1 inline-block text-xs font-bold text-primary hover:underline">
+                    Khata / wasooli →
+                  </Link>
+                </div>
+              </div>
+            </PagePanel>
           </div>
         </>
+      )}
+
+      {openSaleId !== null && (
+        <SaleDetailModal
+          saleId={openSaleId}
+          onClose={() => setOpenSaleId(null)}
+          onReturned={() => {
+            setOpenSaleId(null);
+            getDashboard().then((res) => setData(res)).catch(() => {});
+          }}
+        />
       )}
     </AdminShell>
   );

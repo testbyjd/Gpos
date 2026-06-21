@@ -29,6 +29,16 @@ class ReportController extends Controller
                 'card_wallet' => $card + $wallet,
                 'khata_extended' => $khata,
             ],
+            'sales_today' => $sales->map(fn (Sale $sale) => [
+                'id' => $sale->id,
+                'invoice_no' => $sale->invoice_no,
+                'customer' => $sale->customer?->name ?? 'Walk-in Customer',
+                'amount' => (float) $sale->total,
+                'payment' => $sale->payments->pluck('method')->implode(' + '),
+                'sold_at' => $sale->sold_at?->toIso8601String(),
+            ])->values(),
+            'sales_today_count' => $sales->count(),
+            'sales_today_total' => (float) $sales->sum('total'),
             'recent_sales' => $sales->take(8)->map(fn (Sale $sale) => [
                 'invoice_no' => $sale->invoice_no,
                 'customer' => $sale->customer?->name ?? 'Walk-in Customer',

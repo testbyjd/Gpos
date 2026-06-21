@@ -163,9 +163,36 @@ export interface SaleDetail extends SaleRow {
   }>;
 }
 
-export function listSales(customerId?: number) {
-  const qs = customerId ? `?customer_id=${customerId}` : "";
-  return apiFetch<{ data: SaleRow[]; meta: { current_page: number; last_page: number; total: number } }>(`/sales${qs}`);
+export interface SaleSummaryRow {
+  id: number;
+  invoice_no: string;
+  customer: string;
+  amount: number;
+  payment: string;
+  sold_at: string;
+}
+
+export interface ListSalesParams {
+  customerId?: number;
+  paymentMethod?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  perPage?: number;
+}
+
+export function listSales(params: ListSalesParams = {}) {
+  const q = new URLSearchParams();
+  if (params.customerId) q.set("customer_id", String(params.customerId));
+  if (params.paymentMethod) q.set("payment_method", params.paymentMethod);
+  if (params.from) q.set("from", params.from);
+  if (params.to) q.set("to", params.to);
+  if (params.page) q.set("page", String(params.page));
+  if (params.perPage) q.set("per_page", String(params.perPage));
+  const qs = q.toString();
+  return apiFetch<{ data: SaleRow[]; meta: { current_page: number; last_page: number; total: number } }>(
+    `/sales${qs ? `?${qs}` : ""}`,
+  );
 }
 
 export function getSale(id: number) {
@@ -270,6 +297,9 @@ export function recordVendorPayment(purchaseId: number, amount: number, note?: s
 export function getDashboard() {
   return apiFetch<{
     metrics: { net_sales: number; cash_in_till: number; card_wallet: number; khata_extended: number };
+    sales_today: SaleSummaryRow[];
+    sales_today_count: number;
+    sales_today_total: number;
     recent_sales: Array<{ invoice_no: string; customer: string; amount: number; payment: string; time: string }>;
     low_stock: Array<{ id: number; name: string; unit: string; stock_qty: string | number; low_stock_threshold: string | number }>;
     receivable_total: number;
