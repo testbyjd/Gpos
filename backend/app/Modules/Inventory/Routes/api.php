@@ -16,6 +16,8 @@ Route::middleware('auth:sanctum')->prefix('inventory')->group(function () {
         Route::post('/categories', [CategoryController::class, 'store']);
         Route::post('/products', [ProductController::class, 'store']);
         Route::match(['put', 'patch'], '/products/{product}', [ProductController::class, 'update']);
+        Route::post('/products/{product}/image', [ProductController::class, 'uploadImage']);
+        Route::delete('/products/{product}/image', [ProductController::class, 'deleteImage']);
         Route::delete('/products/{product}', [ProductController::class, 'destroy']);
     });
 });

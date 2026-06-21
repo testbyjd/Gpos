@@ -90,6 +90,7 @@ grep -q '^APP_KEY=base64:' .env || php artisan key:generate --force
 chown -R www-data:www-data storage bootstrap/cache
 chmod -R ug+rwx storage bootstrap/cache
 php artisan migrate --force
+php artisan storage:link --force
 php artisan config:cache
 
 echo "[install] Frontend (Next.js)…"

@@ -8,10 +8,28 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Product extends Model
 {
     protected $fillable = [
-        'store_id', 'category_id', 'sku', 'barcode', 'name', 'brand',
+        'store_id', 'category_id', 'sku', 'barcode', 'name', 'brand', 'image_path',
         'unit', 'unit_precision', 'avg_cost', 'sell_price', 'stock_qty',
         'low_stock_threshold', 'expiry_date', 'is_active',
     ];
+
+    protected $appends = ['image_url'];
+
+    public function getImageUrlAttribute(): ?string
+    {
+        if (! $this->image_path) {
+            return null;
+        }
+
+        return '/storage/'.$this->image_path;
+    }
+
+    public function deleteStoredImage(): void
+    {
+        if ($this->image_path) {
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($this->image_path);
+        }
+    }
 
     protected function casts(): array
     {

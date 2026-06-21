@@ -1,19 +1,21 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { Barcode, X } from "lucide-react";
+import { Barcode, ImagePlus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ModalPortal } from "@/components/ui/modal-portal";
 import { useModalDismiss } from "@/lib/hooks/useModalDismiss";
 import {
   createCategory,
   createProduct,
+  deleteProductImage,
   updateProduct,
+  uploadProductImage,
   type CategoryRow,
   type ProductInput,
   type ProductRow,
 } from "@/lib/admin-api";
-import { getErrorMessage } from "@/lib/api";
+import { getErrorMessage, resolveAssetUrl } from "@/lib/api";
 
 const UNITS = ["pcs", "kg", "g", "litre", "dozen", "pack"] as const;
 
@@ -33,6 +35,7 @@ interface Props {
 export function ProductFormModal({ product, categories, onClose, onSaved, onCategoryAdded }: Props) {
   useModalDismiss(onClose, { escape: false });
   const barcodeRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const isEdit = product !== null;
 
   const [barcode, setBarcode] = useState(product?.barcode ?? "");
@@ -45,6 +48,9 @@ export function ProductFormModal({ product, categories, onClose, onSaved, onCate
   const [stockQty, setStockQty] = useState(product ? String(product.stock_qty) : "0");
   const [lowStock, setLowStock] = useState(product ? String(product.low_stock_threshold) : "0");
   const [expiryDate, setExpiryDate] = useState(product?.expiry_date ?? "");
+  const [imagePreview, setImagePreview] = useState<string | null>(resolveAssetUrl(product?.image_url) ?? null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [removeImage, setRemoveImage] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [localCategories, setLocalCategories] = useState(categories);
@@ -59,6 +65,50 @@ export function ProductFormModal({ product, categories, onClose, onSaved, onCate
   useEffect(() => {
     barcodeRef.current?.focus();
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (imagePreview?.startsWith("blob:")) URL.revokeObjectURL(imagePreview);
+    };
+  }, [imagePreview]);
+
+  function onImagePick(file: File | null) {
+    if (imagePreview?.startsWith("blob:")) URL.revokeObjectURL(imagePreview);
+    if (!file) {
+      setImageFile(null);
+      setImagePreview(resolveAssetUrl(product?.image_url) ?? null);
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      setError("Sirf image file select karo (JPG, PNG, WebP).");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setError("Image 2MB se choti honi chahiye.");
+      return;
+    }
+    setError(null);
+    setImageFile(file);
+    setRemoveImage(false);
+    setImagePreview(URL.createObjectURL(file));
+  }
+
+  function clearImage() {
+    onImagePick(null);
+    setRemoveImage(Boolean(product?.image_url));
+  }
+
+  async function syncImage(productId: number): Promise<ProductRow | null> {
+    if (imageFile) {
+      const res = await uploadProductImage(productId, imageFile);
+      return res.data;
+    }
+    if (removeImage && isEdit) {
+      const res = await deleteProductImage(productId);
+      return res.data;
+    }
+    return null;
+  }
 
   function buildPayload(): ProductInput {
     return {
@@ -93,7 +143,8 @@ export function ProductFormModal({ product, categories, onClose, onSaved, onCate
       const res = isEdit
         ? await updateProduct(product.id, payload)
         : await createProduct(payload);
-      onSaved(res.data);
+      const withImage = (await syncImage(res.data.id)) ?? res.data;
+      onSaved(withImage);
       onClose();
     } catch (err) {
       setError(getErrorMessage(err, "Save failed. Barcode duplicate ho sakta hai — dobara check karo."));
@@ -149,6 +200,41 @@ export function ProductFormModal({ product, categories, onClose, onSaved, onCate
         </div>
 
         <div className="space-y-3">
+          <div className="rounded-lg border border-dashed border-border bg-muted/30 p-3">
+            <span className={labelCls}>Product photo</span>
+            <div className="mt-2 flex items-center gap-3">
+              <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-card">
+                {imagePreview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={imagePreview} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <ImagePlus className="h-7 w-7 text-muted-foreground" />
+                )}
+              </div>
+              <div className="min-w-0 space-y-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(e) => onImagePick(e.target.files?.[0] ?? null)}
+                />
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" size="sm" variant="secondary" onClick={() => fileInputRef.current?.click()}>
+                    {imagePreview ? "Change photo" : "Upload photo"}
+                  </Button>
+                  {(imagePreview || product?.image_url) && (
+                    <Button type="button" size="sm" variant="secondary" onClick={clearImage}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Remove
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">JPG, PNG ya WebP · max 2MB · POS grid pe dikhegi</p>
+              </div>
+            </div>
+          </div>
+
           <label className="block">
             <span className={labelCls}>
               <Barcode className="mr-1 inline h-3.5 w-3.5" />

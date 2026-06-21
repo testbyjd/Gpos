@@ -35,6 +35,7 @@ cd "$APP_DIR/backend"
 export COMPOSER_ALLOW_SUPERUSER=1
 composer install --no-dev --optimize-autoloader --no-interaction
 php artisan migrate --force
+php artisan storage:link --force 2>/dev/null || true
 php artisan config:cache
 php artisan route:cache
 systemctl reload php8.3-fpm 2>/dev/null || true
@@ -52,6 +53,13 @@ elif grep -rq "tasks/summary" "$APP_DIR/frontend/.next/standalone/.next/static/c
   echo "[update] Task UI present in standalone bundle."
 else
   echo "[update] WARNING: Task UI not found in build — check npm run build output." >&2
+fi
+
+if [[ -f "$APP_DIR/deploy/nginx/gondaltrader.com.conf" ]]; then
+  cp "$APP_DIR/deploy/nginx/gondaltrader.com.conf" /etc/nginx/sites-available/gondaltrader.com
+  nginx -t
+  systemctl reload nginx
+  echo "[update] Nginx config reloaded."
 fi
 
 echo "[update] Restart Next.js…"

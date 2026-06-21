@@ -1,6 +1,7 @@
 "use client";
 
 import { PackageX } from "lucide-react";
+import { resolveAssetUrl } from "@/lib/api";
 import { cn, formatMoney } from "@/lib/utils";
 import type { Product } from "../types";
 
@@ -30,8 +31,17 @@ export function ProductGrid({ products, onAdd }: Props) {
             className="group flex min-h-[8.75rem] flex-col rounded-lg border border-border/80 bg-card p-2.5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/45 hover:bg-card-hover hover:shadow-md active:translate-y-0 active:scale-[0.99]"
           >
             <div className="mb-2 flex items-start justify-between gap-2">
-              <span className="flex h-9 w-9 items-center justify-center rounded-md bg-muted text-2xl shadow-inner">
-                {p.emoji ?? "📦"}
+              <span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-md bg-muted text-2xl shadow-inner">
+                {p.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={resolveAssetUrl(p.imageUrl)}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  p.emoji ?? "📦"
+                )}
               </span>
               <span
                 className={cn(

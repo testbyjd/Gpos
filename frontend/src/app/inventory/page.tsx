@@ -8,6 +8,7 @@ import { SearchInput } from "@/components/ui/search-input";
 import { FilterChips } from "@/components/ui/filter-chips";
 import { StatCard } from "@/components/ui/stat-card";
 import { formatMoney } from "@/lib/utils";
+import { resolveAssetUrl } from "@/lib/api";
 import { listCategories, listProducts, type CategoryRow, type ProductRow } from "@/lib/admin-api";
 import { getErrorMessage } from "@/lib/api";
 import { CategoryFormModal } from "@/features/admin/components/AdminActionModals";
@@ -171,7 +172,20 @@ export default function InventoryPage() {
             rows={filtered.map((p) => {
               const isLow = Number(p.stock_qty) <= Number(p.low_stock_threshold);
               return [
-                <div key="product"><div className="font-bold text-foreground">{p.name}</div><div className="text-xs text-muted-foreground">{p.barcode ?? "No barcode"}</div></div>,
+                <div key="product" className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-muted text-lg">
+                    {p.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={resolveAssetUrl(p.image_url)} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      "📦"
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-bold text-foreground">{p.name}</div>
+                    <div className="text-xs text-muted-foreground">{p.barcode ?? "No barcode"}</div>
+                  </div>
+                </div>,
                 <span key="sku" className="font-mono text-xs text-muted-foreground">{p.sku ?? `P-${p.id}`}</span>,
                 p.category ?? "Uncategorized",
                 <span key="stock" className="font-bold tabular-nums text-foreground">{Number(p.stock_qty)} {p.unit}</span>,

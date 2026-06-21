@@ -1,4 +1,4 @@
-import { apiFetch } from "./api";
+import { apiFetch, apiUpload } from "./api";
 
 export interface ProductRow {
   id: number;
@@ -14,6 +14,7 @@ export interface ProductRow {
   low_stock_threshold: number;
   expiry_date: string | null;
   is_active: boolean;
+  image_url?: string | null;
 }
 
 export interface VendorRow {
@@ -97,6 +98,16 @@ export function deleteProduct(id: number) {
     `/inventory/products/${id}`,
     { method: "DELETE" },
   );
+}
+
+export function uploadProductImage(id: number, file: File) {
+  const form = new FormData();
+  form.append("image", file);
+  return apiUpload<{ data: ProductRow }>(`/inventory/products/${id}/image`, form);
+}
+
+export function deleteProductImage(id: number) {
+  return apiUpload<{ data: ProductRow }>(`/inventory/products/${id}/image`, new FormData(), "DELETE");
 }
 
 export function listCustomers() {

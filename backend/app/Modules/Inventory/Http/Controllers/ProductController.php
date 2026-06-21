@@ -7,6 +7,7 @@ use App\Modules\Inventory\Models\Product;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Str;
 
 class ProductController extends Controller
 {
@@ -70,6 +71,7 @@ class ProductController extends Controller
             ]);
         }
 
+        $product->deleteStoredImage();
         $product->delete();
 
         return response()->json([
@@ -77,6 +79,34 @@ class ProductController extends Controller
             'action' => 'deleted',
             'message' => 'Product deleted.',
         ]);
+    }
+
+    public function uploadImage(Request $request, Product $product): JsonResponse
+    {
+        $request->validate([
+            'image' => ['required', 'image', 'mimes:jpeg,jpg,png,webp', 'max:2048'],
+        ]);
+
+        $product->deleteStoredImage();
+
+        $ext = $request->file('image')->guessExtension() ?: 'jpg';
+        $path = $request->file('image')->storeAs(
+            "products/{$product->id}",
+            Str::uuid()->toString().'.'.$ext,
+            'public',
+        );
+
+        $product->update(['image_path' => $path]);
+
+        return response()->json(['data' => new ProductResource($product->load('category'))]);
+    }
+
+    public function deleteImage(Product $product): JsonResponse
+    {
+        $product->deleteStoredImage();
+        $product->update(['image_path' => null]);
+
+        return response()->json(['data' => new ProductResource($product->load('category'))]);
     }
 
     private function validated(Request $request, bool $partial = false): array

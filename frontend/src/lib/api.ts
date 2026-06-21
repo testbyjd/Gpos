@@ -80,6 +80,41 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   return res.json() as Promise<T>;
 }
 
+/** Multipart upload — do not set Content-Type (browser adds boundary). */
+export async function apiUpload<T>(path: string, formData: FormData, method = "POST"): Promise<T> {
+  const token =
+    typeof window !== "undefined" ? window.localStorage.getItem("gpos.auth.token") : null;
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    body: formData,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    if (res.status === 401 && typeof window !== "undefined") {
+      logout();
+      if (!window.location.pathname.startsWith("/login")) {
+        window.location.href = "/login?expired=1";
+      }
+    }
+    throw new ApiError(res.status, parseErrorBody(res.status, body));
+  }
+
+  return res.json() as Promise<T>;
+}
+
+/** Turn API `/storage/...` paths into absolute URLs for `<img src>`. */
+export function resolveAssetUrl(path: string | null | undefined): string | undefined {
+  if (!path) return undefined;
+  if (path.startsWith("http://") || path.startsWith("https://")) return path;
+  if (typeof window !== "undefined") return `${window.location.origin}${path}`;
+  return path;
+}
+
 export async function checkApiHealth(): Promise<boolean> {
   try {
     const data = await apiFetch<{ ok: boolean }>("/health", { cache: "no-store" });

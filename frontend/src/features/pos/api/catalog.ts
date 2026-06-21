@@ -10,6 +10,7 @@ interface ApiProduct {
   unit_precision: number;
   price: number;
   stock: number;
+  image_url?: string | null;
 }
 
 export async function fetchCatalog(): Promise<{ products: Product[]; categories: string[] }> {
@@ -23,6 +24,7 @@ export async function fetchCatalog(): Promise<{ products: Product[]; categories:
     unit: p.unit,
     fractional: p.unit_precision > 0,
     stock: Number(p.stock),
+    imageUrl: p.image_url ?? undefined,
   }));
 
   return {
