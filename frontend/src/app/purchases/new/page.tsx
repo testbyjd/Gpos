@@ -29,9 +29,11 @@ import { apiFetch, getErrorMessage } from "@/lib/api";
 import {
   appendPurchaseLines,
   getPurchase,
+  listCategories,
   listProducts,
   listVendors,
   reopenPurchase,
+  type CategoryRow,
   type ProductRow,
   type PurchaseRow,
   type VendorRow,
@@ -53,6 +55,7 @@ export default function NewPurchasePage() {
   const router = useRouter();
   const [vendors, setVendors] = useState<VendorRow[]>([]);
   const [products, setProducts] = useState<ProductRow[]>([]);
+  const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [vendor, setVendor] = useState("");
   const [barcode, setBarcode] = useState("");
   const [lines, setLines] = useState<DraftLine[]>([]);
@@ -105,16 +108,18 @@ export default function NewPurchasePage() {
 
   useEffect(() => {
     let alive = true;
-    Promise.all([listVendors(), listProducts()])
-      .then(([vendorRes, productRes]) => {
+    Promise.all([listVendors(), listProducts(), listCategories()])
+      .then(([vendorRes, productRes, categoryRes]) => {
         if (!alive) return;
         setVendors(vendorRes.data);
         setProducts(productRes.data);
+        setCategories(categoryRes.data);
       })
       .catch((err) => {
         if (!alive) return;
         setVendors([]);
         setProducts([]);
+        setCategories([]);
         setLoadError(getErrorMessage(err, "Vendors/products load nahi hue. Server check karo."));
       });
     return () => {
@@ -189,6 +194,7 @@ export default function NewPurchasePage() {
         product_id: existing?.id,
         barcode: line.barcode || undefined,
         name: line.name,
+        category_id: existing ? undefined : line.category_id ?? null,
         unit: line.unit,
         qty: line.qty,
         unit_cost: line.cost,
@@ -488,6 +494,7 @@ export default function NewPurchasePage() {
         <ReceiveItemModal
           barcode={scan.barcode}
           existing={scan.existing}
+          categories={categories}
           onAdd={addLine}
           onClose={() => setScan(null)}
         />

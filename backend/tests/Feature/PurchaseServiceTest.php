@@ -77,16 +77,25 @@ class PurchaseServiceTest extends TestCase
     public function test_purchase_can_create_new_product_on_the_fly(): void
     {
         $vendor = Vendor::create(['name' => 'New Supplier', 'balance' => 0, 'is_active' => true]);
+        $category = \App\Modules\Inventory\Models\Category::create(['name' => 'Pulses']);
 
         app(PurchaseService::class)->create([
             'vendor_id' => $vendor->id,
             'lines' => [
-                ['name' => 'Daal Chana', 'unit' => 'kg', 'qty' => 25, 'unit_cost' => 180, 'sell_price' => 220],
+                [
+                    'name' => 'Daal Chana',
+                    'category_id' => $category->id,
+                    'unit' => 'kg',
+                    'qty' => 25,
+                    'unit_cost' => 180,
+                    'sell_price' => 220,
+                ],
             ],
         ]);
 
         $product = Product::where('name', 'Daal Chana')->firstOrFail();
 
+        $this->assertEquals($category->id, $product->category_id);
         $this->assertEquals(180.00, (float) $product->avg_cost);
         $this->assertEquals(25.000, (float) $product->stock_qty);
         $this->assertEquals(220.00, (float) $product->sell_price);

@@ -1,14 +1,5 @@
 import type { UnitType } from "@/features/pos/types";
 
-export const PURCHASE_CATEGORIES = [
-  "Grains & Pulses",
-  "Cooking",
-  "Dairy",
-  "Beverages",
-  "Snacks",
-  "Household",
-] as const;
-
 export const UNITS: UnitType[] = ["pcs", "kg", "g", "dozen", "litre", "pack"];
 
 export interface PurchaseProduct {

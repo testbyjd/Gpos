@@ -116,6 +116,7 @@ class PurchaseService
         if (! $product) {
             $product = Product::create([
                 'store_id' => $storeId,
+                'category_id' => $line['category_id'] ?? null,
                 'barcode' => $line['barcode'] ?? null,
                 'name' => $line['name'],
                 'unit' => $line['unit'] ?? 'pcs',

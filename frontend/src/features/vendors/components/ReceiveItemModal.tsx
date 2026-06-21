@@ -5,18 +5,15 @@ import { CalendarClock, PackageCheck, Sparkles, Tag, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn, formatMoney } from "@/lib/utils";
 import type { UnitType } from "@/features/pos/types";
-import {
-  PURCHASE_CATEGORIES,
-  UNITS,
-  newAverageCost,
-  type PurchaseProduct,
-} from "../data/purchasing";
+import type { CategoryRow } from "@/lib/admin-api";
+import { UNITS, newAverageCost, type PurchaseProduct } from "../data/purchasing";
 
 export interface DraftLine {
   id: string;
   barcode: string;
   name: string;
   category: string;
+  category_id?: number | null;
   unit: string;
   qty: number;
   cost: number;
@@ -36,11 +33,12 @@ const labelCls =
 interface Props {
   barcode: string;
   existing?: PurchaseProduct;
+  categories: CategoryRow[];
   onAdd: (line: Omit<DraftLine, "id">) => void;
   onClose: () => void;
 }
 
-export function ReceiveItemModal({ barcode, existing, onAdd, onClose }: Props) {
+export function ReceiveItemModal({ barcode, existing, categories, onAdd, onClose }: Props) {
   const isNew = !existing;
 
   useEffect(() => {
@@ -55,7 +53,7 @@ export function ReceiveItemModal({ barcode, existing, onAdd, onClose }: Props) {
   const [cost, setCost] = useState(existing ? String(existing.lastCost) : "");
   // New-product fields
   const [name, setName] = useState("");
-  const [category, setCategory] = useState<string>(PURCHASE_CATEGORIES[0]);
+  const [categoryId, setCategoryId] = useState("");
   const [unit, setUnit] = useState<UnitType>("pcs");
   const [sellPrice, setSellPrice] = useState("");
   // Optional fields
@@ -82,10 +80,12 @@ export function ReceiveItemModal({ barcode, existing, onAdd, onClose }: Props) {
 
   function submit() {
     if (!valid) return;
+    const picked = categories.find((c) => String(c.id) === categoryId);
     onAdd({
       barcode,
       name: resolvedName,
-      category: existing ? existing.category : category,
+      category: existing ? existing.category : picked?.name ?? "Uncategorized",
+      category_id: existing ? undefined : picked?.id ?? null,
       unit: resolvedUnit,
       qty: qtyNum,
       cost: costNum,
@@ -176,9 +176,12 @@ export function ReceiveItemModal({ barcode, existing, onAdd, onClose }: Props) {
               <div className="grid grid-cols-3 gap-3">
                 <label className="block">
                   <span className={labelCls}>Category</span>
-                  <select value={category} onChange={(e) => setCategory(e.target.value)} className={inputCls}>
-                    {PURCHASE_CATEGORIES.map((c) => (
-                      <option key={c}>{c}</option>
+                  <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={inputCls}>
+                    <option value="">Uncategorized</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
                     ))}
                   </select>
                 </label>

@@ -15,6 +15,7 @@ class PurchaseController extends Controller
         'lines.*.product_id' => ['nullable', 'integer', 'exists:products,id'],
         'lines.*.barcode' => ['nullable', 'string', 'max:80'],
         'lines.*.name' => ['required_without:lines.*.product_id', 'string', 'max:180'],
+        'lines.*.category_id' => ['nullable', 'integer', 'exists:categories,id'],
         'lines.*.unit' => ['nullable', 'string', 'max:20'],
         'lines.*.sell_price' => ['nullable', 'numeric', 'min:0'],
         'lines.*.qty' => ['required', 'numeric', 'gt:0'],
