@@ -26,7 +26,16 @@ import {
   type DraftLine,
 } from "@/features/vendors/components/ReceiveItemModal";
 import { apiFetch, getErrorMessage } from "@/lib/api";
-import { listProducts, listVendors, type ProductRow, type VendorRow } from "@/lib/admin-api";
+import {
+  appendPurchaseLines,
+  getPurchase,
+  listProducts,
+  listVendors,
+  reopenPurchase,
+  type ProductRow,
+  type PurchaseRow,
+  type VendorRow,
+} from "@/lib/admin-api";
 import type { PurchaseProduct } from "@/features/vendors/data/purchasing";
 import {
   PURCHASE_PAYMENT_TERMS,
@@ -50,6 +59,9 @@ export default function NewPurchasePage() {
   const [scan, setScan] = useState<ScanTarget | null>(null);
   const [terms, setTerms] = useState<PurchasePaymentTerm>("on_account");
   const [paidInput, setPaidInput] = useState("0");
+  const [keepGrnOpen, setKeepGrnOpen] = useState(false);
+  const [extendPurchase, setExtendPurchase] = useState<PurchaseRow | null>(null);
+  const [extendLoading, setExtendLoading] = useState(false);
   const { toast, showToast, hideToast } = useAppToast();
   const [loadError, setLoadError] = useState<string | null>(null);
   const [posting, setPosting] = useState(false);
@@ -62,6 +74,7 @@ export default function NewPurchasePage() {
   const balanceDue = Math.max(0, subtotal - paidAmount);
   const canPost = vendor !== "" && lines.length > 0 && paidAmount <= subtotal;
   const hasDraft = lines.length > 0;
+  const isExtend = extendPurchase !== null;
 
   useEffect(() => {
     const option = PURCHASE_PAYMENT_TERMS.find((t) => t.value === terms);
@@ -109,6 +122,29 @@ export default function NewPurchasePage() {
     };
   }, []);
 
+  useEffect(() => {
+    const extendId = new URLSearchParams(window.location.search).get("extend");
+    if (!extendId) return;
+
+    setExtendLoading(true);
+    getPurchase(Number(extendId))
+      .then(async (res) => {
+        let purchase = res.data;
+        if (purchase.receiving_status !== "open") {
+          const reopened = await reopenPurchase(purchase.id);
+          purchase = reopened.data;
+        }
+        setExtendPurchase(purchase);
+        if (purchase.vendor?.id) {
+          setVendor(String(purchase.vendor.id));
+        }
+      })
+      .catch((err) => {
+        setLoadError(getErrorMessage(err, "GRN load nahi hui — extend nahi ho sakta."));
+      })
+      .finally(() => setExtendLoading(false));
+  }, []);
+
   function toPurchaseProduct(product: ProductRow): PurchaseProduct {
     return {
       barcode: product.barcode ?? "",
@@ -143,41 +179,52 @@ export default function NewPurchasePage() {
 
   async function postPurchase() {
     if (!canPost || posting) return;
-    if (!postClientId.current) {
+    if (!isExtend && !postClientId.current) {
       postClientId.current = crypto.randomUUID();
     }
     setPosting(true);
+    const linePayload = lines.map((line) => {
+      const existing = products.find((product) => product.barcode && product.barcode === line.barcode);
+      return {
+        product_id: existing?.id,
+        barcode: line.barcode || undefined,
+        name: line.name,
+        unit: line.unit,
+        qty: line.qty,
+        unit_cost: line.cost,
+        sell_price: line.sellPrice,
+        expiry_date: line.expiry,
+        promotion: line.promo,
+      };
+    });
     try {
-      await apiFetch("/purchases", {
-        method: "POST",
-        body: JSON.stringify({
-          client_id: postClientId.current,
-          vendor_id: Number(vendor),
-          payment_terms: terms,
+      if (isExtend && extendPurchase) {
+        await appendPurchaseLines(extendPurchase.id, {
           paid_amount: paidAmount,
-          lines: lines.map((line) => {
-            const existing = products.find((product) => product.barcode && product.barcode === line.barcode);
-            return {
-              product_id: existing?.id,
-              barcode: line.barcode || undefined,
-              name: line.name,
-              unit: line.unit,
-              qty: line.qty,
-              unit_cost: line.cost,
-              sell_price: line.sellPrice,
-              expiry_date: line.expiry,
-              promotion: line.promo,
-            };
+          lines: linePayload,
+        });
+        showToast(`${extendPurchase.grn_no} mein aur items add ho gaye · ${formatMoney(subtotal)}`, "success");
+      } else {
+        await apiFetch("/purchases", {
+          method: "POST",
+          body: JSON.stringify({
+            client_id: postClientId.current,
+            vendor_id: Number(vendor),
+            payment_terms: terms,
+            paid_amount: paidAmount,
+            receiving_open: keepGrnOpen,
+            lines: linePayload,
           }),
-        }),
-      });
-      const termNote = paidAmount > 0 ? " · paid" : " · on account";
-      showToast(`Purchase posted · ${formatMoney(subtotal)}${termNote}`, "success");
-      postClientId.current = null;
+        });
+        const termNote = paidAmount > 0 ? " · paid" : " · on account";
+        const openNote = keepGrnOpen ? " · GRN open" : "";
+        showToast(`Purchase posted · ${formatMoney(subtotal)}${termNote}${openNote}`, "success");
+        postClientId.current = null;
+      }
       setLines([]);
       window.setTimeout(() => router.push("/purchases?posted=1"), 900);
     } catch (err) {
-      showToast(getErrorMessage(err, "Purchase post nahi hui. Backend/API check karo."), "error");
+      showToast(getErrorMessage(err, isExtend ? "GRN extend nahi hui." : "Purchase post nahi hui. Backend/API check karo."), "error");
     } finally {
       setPosting(false);
     }
@@ -185,8 +232,8 @@ export default function NewPurchasePage() {
 
   return (
     <AdminShell
-      title="New Purchase"
-      eyebrow="Goods received (GRN)"
+      title={isExtend ? `Extend ${extendPurchase?.grn_no ?? "GRN"}` : "New Purchase"}
+      eyebrow={isExtend ? "Add more items to same GRN" : "Goods received (GRN)"}
       actions={
         <Link
           href="/purchases"
@@ -199,9 +246,18 @@ export default function NewPurchasePage() {
       }
     >
       {loadError && <PageAlert message={loadError} tone="error" />}
+      {extendLoading && (
+        <PageAlert message="GRN load ho rahi hai…" tone="info" />
+      )}
+      {isExtend && extendPurchase && !loadError && (
+        <PageAlert
+          message={`${extendPurchase.grn_no} — pehle se ${extendPurchase.lines.length} line(s), total ${formatMoney(Number(extendPurchase.subtotal))}. Naye items yahan add karo.`}
+          tone="info"
+        />
+      )}
       {hasDraft && !loadError && (
         <PageAlert
-          message="Draft list mein hai — stock tab tak update nahi hoga jab tak Post purchase na dabao."
+          message={isExtend ? "Naye items list mein hain — Add to GRN dabao." : "Draft list mein hai — stock tab tak update nahi hoga jab tak Post purchase na dabao."}
           tone="info"
         />
       )}
@@ -217,6 +273,7 @@ export default function NewPurchasePage() {
                 </span>
                 <select
                   value={vendor}
+                  disabled={isExtend}
                   onChange={(e) => {
                     setVendor(e.target.value);
                     setTimeout(() => barcodeRef.current?.focus(), 0);
@@ -396,12 +453,27 @@ export default function NewPurchasePage() {
             </label>
             <p className="mt-2 text-xs text-muted-foreground">
               {terms === "on_account"
-                ? "Jitna abhi diya us ki amount likho — baqi vendor balance (udhar) mein jayega."
+                ? isExtend
+                  ? "Is batch ka jo abhi pay kiya us ki amount likho — GRN total update hoga."
+                  : "Jitna abhi diya us ki amount likho — baqi vendor balance (udhar) mein jayega."
                 : `${purchaseTermLabel(terms)} — default poora amount paid; kam zyada adjust kar sakte ho.`}
             </p>
-            <Button size="lg" className="mt-4 w-full" disabled={!canPost || posting} onClick={postPurchase}>
+            {!isExtend && (
+              <label className="mt-3 flex cursor-pointer items-start gap-2 rounded-md border border-border/80 bg-muted/40 p-3">
+                <input
+                  type="checkbox"
+                  checked={keepGrnOpen}
+                  onChange={(e) => setKeepGrnOpen(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-border"
+                />
+                <span className="text-xs leading-relaxed text-muted-foreground">
+                  <span className="font-bold text-foreground">GRN khuli rakho</span> — baad mein aur items same GRN mein add kar sakte ho (250 ka bill, aaj 100, kal 150).
+                </span>
+              </label>
+            )}
+            <Button size="lg" className="mt-4 w-full" disabled={!canPost || posting || extendLoading} onClick={postPurchase}>
               <PackagePlus className="h-5 w-5" />
-              {posting ? "Posting..." : "Post purchase"}
+              {posting ? "Saving…" : isExtend ? "Add to GRN" : "Post purchase"}
             </Button>
             {!canPost && (
               <p className="mt-2 text-center text-[11px] text-muted-foreground">

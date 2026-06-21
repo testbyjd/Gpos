@@ -1,14 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CalendarClock, Download, Pencil, Plus, Trash2, Upload } from "lucide-react";
+import { CalendarClock, Download, Pencil, Plus, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AppToast, useAppToast } from "@/components/ui/app-toast";
 import { SearchInput } from "@/components/ui/search-input";
 import { FilterChips } from "@/components/ui/filter-chips";
 import { StatCard } from "@/components/ui/stat-card";
 import { formatMoney } from "@/lib/utils";
-import { deleteProduct, listCategories, listProducts, type CategoryRow, type ProductRow } from "@/lib/admin-api";
+import { listCategories, listProducts, type CategoryRow, type ProductRow } from "@/lib/admin-api";
 import { getErrorMessage } from "@/lib/api";
 import { CategoryFormModal } from "@/features/admin/components/AdminActionModals";
 import { ProductFormModal } from "@/features/admin/components/ProductFormModal";
@@ -67,7 +67,6 @@ export default function InventoryPage() {
   const [category, setCategory] = useState("All");
   const { toast, showToast, hideToast } = useAppToast();
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [formProduct, setFormProduct] = useState<ProductRow | null | "new">(null);
   const [showAddCategory, setShowAddCategory] = useState(false);
@@ -104,22 +103,6 @@ export default function InventoryPage() {
     });
     showToast(formProduct === "new" ? `"${product.name}" add ho gaya.` : `"${product.name}" update ho gaya.`, "success");
     setFormProduct(null);
-  }
-
-  async function handleDelete(product: ProductRow) {
-    const usedHint = "Agar ye product kahin use ho chuka hai to sirf inactive hoga.";
-    if (!window.confirm(`"${product.name}" delete karna hai?\n\n${usedHint}`)) return;
-
-    setDeletingId(product.id);
-    try {
-      const res = await deleteProduct(product.id);
-      setProducts((prev) => prev.filter((p) => p.id !== product.id));
-      showToast(res.message, "success");
-    } catch (err) {
-      showToast(getErrorMessage(err, "Delete failed. Try again."), "error");
-    } finally {
-      setDeletingId(null);
-    }
   }
 
   const filterCategories = useMemo(
@@ -196,25 +179,15 @@ export default function InventoryPage() {
                 <span key="price" className="font-bold tabular-nums text-primary">{formatMoney(Number(p.sell_price))}</span>,
                 <span key="expiry">{expiryPill(p.expiry_date)}</span>,
                 <StatusPill key="state" tone={isLow ? "warn" : "good"}>{isLow ? "Low" : "OK"}</StatusPill>,
-                <div key="actions" className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setFormProduct(p)}
-                    aria-label={`Edit ${p.name}`}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(p)}
-                    disabled={deletingId === p.id}
-                    aria-label={`Delete ${p.name}`}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-50"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>,
+                <button
+                  key="edit"
+                  type="button"
+                  onClick={() => setFormProduct(p)}
+                  aria-label={`Edit ${p.name}`}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>,
               ];
             })}
           />

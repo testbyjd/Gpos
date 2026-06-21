@@ -22,8 +22,14 @@ import {
   StatusPill,
 } from "@/features/admin/components/AdminShell";
 
-function stateTone(balance: number) {
-  return balance > 0 ? "warn" : "good";
+function stateTone(purchase: PurchaseRow) {
+  if (purchase.receiving_status === "open") return "info";
+  return Number(purchase.balance_amount) > 0 ? "warn" : "good";
+}
+
+function stateLabel(purchase: PurchaseRow) {
+  if (purchase.receiving_status === "open") return "Open GRN";
+  return Number(purchase.balance_amount) > 0 ? "Partial" : "Paid";
 }
 
 function PurchasesPageContent() {
@@ -119,7 +125,7 @@ function PurchasesPageContent() {
                   purchase.lines.map((l) => l.product?.name).filter(Boolean).join(", ") || `${purchase.lines.length} lines`,
                   <span key="amount" className="font-black tabular-nums text-foreground">{formatMoney(Number(purchase.subtotal))}</span>,
                   <span key="balance" className="font-bold tabular-nums text-foreground">{formatMoney(balance)}</span>,
-                  <StatusPill key="state" tone={stateTone(balance)}>{balance > 0 ? "Partial" : "Paid"}</StatusPill>,
+                  <StatusPill key="state" tone={stateTone(purchase)}>{stateLabel(purchase)}</StatusPill>,
                 ];
               })}
             />
@@ -142,6 +148,7 @@ function PurchasesPageContent() {
           purchase={selected}
           onClose={() => setSelected(null)}
           onReturned={() => load()}
+          onUpdated={() => load()}
         />
       )}
       <AppToast toast={toast} onDismiss={hideToast} />

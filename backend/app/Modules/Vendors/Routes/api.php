@@ -17,6 +17,10 @@ Route::middleware(['auth:sanctum', 'role:owner,manager'])->group(function () {
     Route::prefix('purchases')->group(function () {
         Route::get('/', [PurchaseController::class, 'index']);
         Route::post('/', [PurchaseController::class, 'store']);
+        Route::get('/{purchase}', [PurchaseController::class, 'show']);
+        Route::post('/{purchase}/lines', [PurchaseController::class, 'appendLines']);
+        Route::post('/{purchase}/reopen', [PurchaseController::class, 'reopen']);
+        Route::post('/{purchase}/close', [PurchaseController::class, 'close']);
     });
 
     Route::prefix('purchase-returns')->group(function () {

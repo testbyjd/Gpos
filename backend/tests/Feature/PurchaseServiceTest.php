@@ -91,4 +91,67 @@ class PurchaseServiceTest extends TestCase
         $this->assertEquals(25.000, (float) $product->stock_qty);
         $this->assertEquals(220.00, (float) $product->sell_price);
     }
+
+    public function test_open_grn_can_receive_more_lines_later(): void
+    {
+        $vendor = Vendor::create(['name' => 'Wholesale', 'balance' => 0, 'is_active' => true]);
+        $product = Product::create([
+            'name' => 'Oil Tin',
+            'unit' => 'pcs',
+            'avg_cost' => 100,
+            'sell_price' => 130,
+            'stock_qty' => 0,
+            'low_stock_threshold' => 5,
+            'is_active' => true,
+        ]);
+
+        $service = app(PurchaseService::class);
+        $purchase = $service->create([
+            'vendor_id' => $vendor->id,
+            'receiving_open' => true,
+            'lines' => [
+                ['product_id' => $product->id, 'qty' => 100, 'unit_cost' => 110],
+            ],
+        ]);
+
+        $this->assertSame('open', $purchase->receiving_status);
+        $this->assertEquals(100.000, (float) $product->fresh()->stock_qty);
+
+        $updated = $service->appendLines($purchase, [
+            ['product_id' => $product->id, 'qty' => 150, 'unit_cost' => 112],
+        ]);
+
+        $this->assertEquals(250.000, (float) $product->fresh()->stock_qty);
+        $this->assertEquals(27800.00, (float) $updated->subtotal); // 100*110 + 150*112
+        $this->assertCount(2, $updated->lines);
+    }
+
+    public function test_closed_grn_cannot_append_without_reopen(): void
+    {
+        $vendor = Vendor::create(['name' => 'Wholesale', 'balance' => 0, 'is_active' => true]);
+        $product = Product::create([
+            'name' => 'Oil Tin',
+            'unit' => 'pcs',
+            'avg_cost' => 100,
+            'sell_price' => 130,
+            'stock_qty' => 0,
+            'low_stock_threshold' => 5,
+            'is_active' => true,
+        ]);
+
+        $service = app(PurchaseService::class);
+        $purchase = $service->create([
+            'vendor_id' => $vendor->id,
+            'lines' => [
+                ['product_id' => $product->id, 'qty' => 10, 'unit_cost' => 110],
+            ],
+        ]);
+
+        $this->assertSame('closed', $purchase->receiving_status);
+
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $service->appendLines($purchase, [
+            ['product_id' => $product->id, 'qty' => 5, 'unit_cost' => 110],
+        ]);
+    }
 }

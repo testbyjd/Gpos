@@ -36,6 +36,7 @@ export interface CustomerRow {
 export interface PurchaseRow {
   id: number;
   grn_no: string;
+  receiving_status?: "open" | "closed";
   vendor?: VendorRow;
   subtotal: string | number;
   paid_amount: string | number;
@@ -235,6 +236,28 @@ export function createSaleReturn(data: {
 
 export function listPurchases() {
   return apiFetch<{ data: PurchaseRow[] }>("/purchases");
+}
+
+export function getPurchase(id: number) {
+  return apiFetch<{ data: PurchaseRow }>(`/purchases/${id}`);
+}
+
+export function appendPurchaseLines(
+  purchaseId: number,
+  data: { paid_amount?: number; lines: Array<Record<string, unknown>> },
+) {
+  return apiFetch<{ data: PurchaseRow }>(`/purchases/${purchaseId}/lines`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function reopenPurchase(purchaseId: number) {
+  return apiFetch<{ data: PurchaseRow }>(`/purchases/${purchaseId}/reopen`, { method: "POST" });
+}
+
+export function closePurchase(purchaseId: number) {
+  return apiFetch<{ data: PurchaseRow }>(`/purchases/${purchaseId}/close`, { method: "POST" });
 }
 
 export function getPayables() {

@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useState, type ReactNode } from "react";
-import { X } from "lucide-react";
+import { PackagePlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ModalPortal } from "@/components/ui/modal-portal";
 import { useModalDismiss } from "@/lib/hooks/useModalDismiss";
@@ -10,6 +11,7 @@ import { DataTable, StatusPill } from "@/features/admin/components/AdminShell";
 import {
   createPurchaseReturn,
   createSaleReturn,
+  closePurchase,
   getCustomerLedger,
   getSale,
   getVendorDetail,
@@ -632,14 +634,31 @@ export function PurchaseDetailModal({
   purchase,
   onClose,
   onReturned,
+  onUpdated,
 }: {
   purchase: PurchaseRow;
   onClose: () => void;
   onReturned?: () => void;
+  onUpdated?: () => void;
 }) {
   useModalDismiss(onClose, { escape: false });
-  const balance = Number(purchase.balance_amount);
+  const [grn, setGrn] = useState(purchase);
+  const balance = Number(grn.balance_amount);
   const [showReturn, setShowReturn] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const isOpen = grn.receiving_status === "open";
+
+  async function handleCloseGrn() {
+    if (!window.confirm(`${grn.grn_no} band karni hai? Baad mein aur items ke liye reopen karna hoga.`)) return;
+    setClosing(true);
+    try {
+      const res = await closePurchase(grn.id);
+      setGrn(res.data);
+      onUpdated?.();
+    } finally {
+      setClosing(false);
+    }
+  }
 
   return (
     <ModalPortal>
@@ -648,11 +667,26 @@ export function PurchaseDetailModal({
           <section className="w-full max-w-2xl rounded-xl border border-border/80 bg-card p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
-                <StatusPill tone={balance > 0 ? "warn" : "good"}>{balance > 0 ? "Partial" : "Paid"}</StatusPill>
-                <h3 className="mt-2 text-lg font-black text-foreground">{purchase.grn_no} · {purchase.vendor?.name ?? "Vendor"}</h3>
-                <p className="mt-1 text-sm text-muted-foreground">{new Date(purchase.received_at).toLocaleString("en-PK")}</p>
+                <div className="flex flex-wrap gap-2">
+                  <StatusPill tone={balance > 0 ? "warn" : "good"}>{balance > 0 ? "Partial" : "Paid"}</StatusPill>
+                  {isOpen && <StatusPill tone="info">Open GRN</StatusPill>}
+                </div>
+                <h3 className="mt-2 text-lg font-black text-foreground">{grn.grn_no} · {grn.vendor?.name ?? "Vendor"}</h3>
+                <p className="mt-1 text-sm text-muted-foreground">{new Date(grn.received_at).toLocaleString("en-PK")}</p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <Link
+                  href={`/purchases/new?extend=${grn.id}`}
+                  className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-semibold text-foreground transition-colors hover:bg-card-hover"
+                >
+                  <PackagePlus className="h-4 w-4" />
+                  {isOpen ? "Add more items" : "Extend GRN"}
+                </Link>
+                {isOpen && (
+                  <Button size="sm" variant="secondary" disabled={closing} onClick={handleCloseGrn}>
+                    {closing ? "Closing…" : "Close GRN"}
+                  </Button>
+                )}
                 <Button size="sm" variant="secondary" onClick={() => setShowReturn(true)}>
                   Return to vendor
                 </Button>
@@ -662,15 +696,15 @@ export function PurchaseDetailModal({
               </div>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <SummaryCard label="Total" value={formatMoney(Number(purchase.subtotal))} />
-              <SummaryCard label="Paid" value={formatMoney(Number(purchase.paid_amount))} />
+              <SummaryCard label="Total" value={formatMoney(Number(grn.subtotal))} />
+              <SummaryCard label="Paid" value={formatMoney(Number(grn.paid_amount))} />
               <SummaryCard label="Balance" value={formatMoney(balance)} tone={balance > 0 ? "warn" : "good"} />
             </div>
             <div className="mt-4">
               <DataTable
                 minWidth="460px"
                 columns={["Product", "Qty", "Unit cost", "Line total"]}
-                rows={purchase.lines.map((l) => [
+                rows={grn.lines.map((l) => [
                   l.product?.name ?? "Product",
                   Number(l.qty),
                   formatMoney(Number(l.unit_cost)),
@@ -681,7 +715,7 @@ export function PurchaseDetailModal({
 
             {showReturn && (
               <PurchaseReturnModal
-                purchase={purchase}
+                purchase={grn}
                 onClose={() => setShowReturn(false)}
                 onSaved={() => {
                   setShowReturn(false);
