@@ -23,14 +23,17 @@ php artisan route:cache
 
 echo "[update] Frontend…"
 cd "$APP_DIR/frontend"
+rm -rf .next
 npm ci
 NEXT_PUBLIC_API_BASE_URL=/api/v1 npm run build
 chown -R www-data:www-data .next
 
-if ! rg -q "tasks/summary" "$APP_DIR/frontend/.next/static/chunks" 2>/dev/null; then
-  echo "[update] WARNING: Task UI not found in build — check npm run build output." >&2
-else
+if grep -rq "tasks/summary" "$APP_DIR/frontend/.next/static/chunks" 2>/dev/null; then
   echo "[update] Task UI present in static bundle."
+elif grep -rq "tasks/summary" "$APP_DIR/frontend/.next/standalone/.next/static/chunks" 2>/dev/null; then
+  echo "[update] Task UI present in standalone bundle."
+else
+  echo "[update] WARNING: Task UI not found in build — check npm run build output." >&2
 fi
 
 echo "[update] Restart Next.js…"

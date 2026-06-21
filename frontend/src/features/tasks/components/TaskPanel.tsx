@@ -28,6 +28,21 @@ const PRIORITY_TONE: Record<TaskPriority, string> = {
   low: "border-border bg-muted text-muted-foreground",
 };
 
+function formatDueAt(iso: string): string {
+  return new Date(iso).toLocaleString("en-PK", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function dueAtForApi(value: string): string | undefined {
+  if (!value) return undefined;
+  return value.length === 16 ? `${value}:00` : value;
+}
+
 interface TaskPanelProps {
   anchorRef: React.RefObject<HTMLElement | null>;
   onClose: () => void;
@@ -96,7 +111,7 @@ export function TaskPanel({ anchorRef, onClose, onChanged }: TaskPanelProps) {
       await createTask({
         title: trimmed,
         priority,
-        due_at: dueAt || undefined,
+        due_at: dueAtForApi(dueAt),
         assigned_to: isOwner && assignedTo ? Number(assignedTo) : undefined,
       });
       setTitle("");
@@ -175,9 +190,9 @@ export function TaskPanel({ anchorRef, onClose, onChanged }: TaskPanelProps) {
           ))}
         </div>
         <label className="block text-xs font-semibold text-muted-foreground">
-          Due date (optional)
+          Due date & time (optional)
           <input
-            type="date"
+            type="datetime-local"
             value={dueAt}
             onChange={(e) => setDueAt(e.target.value)}
             className="mt-1 h-9 w-full rounded-md border border-border bg-input px-2 text-sm font-semibold outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
@@ -266,7 +281,7 @@ export function TaskPanel({ anchorRef, onClose, onChanged }: TaskPanelProps) {
                     )}
                     {task.due_at && task.status === "open" && (
                       <span className="text-muted-foreground">
-                        · Due {new Date(task.due_at).toLocaleDateString("en-PK")}
+                        · Due {formatDueAt(task.due_at)}
                       </span>
                     )}
                   </div>

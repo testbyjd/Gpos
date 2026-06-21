@@ -42,7 +42,7 @@ export function TaskBell() {
         title="Staff tasks"
       >
         <Bell className="h-4 w-4 shrink-0" />
-        <span className="hidden text-xs font-bold sm:inline">Tasks</span>
+        <span className="text-xs font-bold">Tasks</span>
         {openCount > 0 && (
           <span
             className={cn(
