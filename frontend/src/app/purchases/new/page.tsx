@@ -39,10 +39,8 @@ import {
 } from "@/lib/admin-api";
 import type { PurchaseProduct } from "@/features/vendors/data/purchasing";
 import {
-  PURCHASE_PAYMENT_TERMS,
   clampPaidAmount,
-  purchaseTermLabel,
-  type PurchasePaymentTerm,
+  inferPurchasePaymentTerms,
 } from "@/features/vendors/data/payment-terms";
 
 type ScanTarget = { barcode: string; existing?: PurchaseProduct };
@@ -59,7 +57,6 @@ export default function NewPurchasePage() {
   const [barcode, setBarcode] = useState("");
   const [lines, setLines] = useState<DraftLine[]>([]);
   const [scan, setScan] = useState<ScanTarget | null>(null);
-  const [terms, setTerms] = useState<PurchasePaymentTerm>("on_account");
   const [paidInput, setPaidInput] = useState("0");
   const [keepGrnOpen, setKeepGrnOpen] = useState(false);
   const [extendPurchase, setExtendPurchase] = useState<PurchaseRow | null>(null);
@@ -77,13 +74,6 @@ export default function NewPurchasePage() {
   const canPost = vendor !== "" && lines.length > 0 && paidAmount <= subtotal;
   const hasDraft = lines.length > 0;
   const isExtend = extendPurchase !== null;
-
-  useEffect(() => {
-    const option = PURCHASE_PAYMENT_TERMS.find((t) => t.value === terms);
-    if (option?.payFull) {
-      setPaidInput(subtotal > 0 ? String(subtotal) : "0");
-    }
-  }, [terms, subtotal]);
 
   useEffect(() => {
     if (!hasDraft) return;
@@ -215,7 +205,7 @@ export default function NewPurchasePage() {
           body: JSON.stringify({
             client_id: postClientId.current,
             vendor_id: Number(vendor),
-            payment_terms: terms,
+            payment_terms: inferPurchasePaymentTerms(subtotal, paidAmount),
             paid_amount: paidAmount,
             receiving_open: keepGrnOpen,
             lines: linePayload,
@@ -428,22 +418,6 @@ export default function NewPurchasePage() {
           <PagePanel className="p-4">
             <label className="block">
               <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                Payment terms
-              </span>
-              <select
-                value={terms}
-                onChange={(e) => setTerms(e.target.value as PurchasePaymentTerm)}
-                className={inputCls}
-              >
-                {PURCHASE_PAYMENT_TERMS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="mt-3 block">
-              <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-muted-foreground">
                 Paid now (Rs)
               </span>
               <input
@@ -457,11 +431,9 @@ export default function NewPurchasePage() {
               />
             </label>
             <p className="mt-2 text-xs text-muted-foreground">
-              {terms === "on_account"
-                ? isExtend
-                  ? "Is batch ka jo abhi pay kiya us ki amount likho — GRN total update hoga."
-                  : "Jitna abhi diya us ki amount likho — baqi vendor balance (udhar) mein jayega."
-                : `${purchaseTermLabel(terms)} — default poora amount paid; kam zyada adjust kar sakte ho.`}
+              {isExtend
+                ? "Is batch ka jo abhi pay kiya us ki amount likho — GRN total update hoga."
+                : "Jitna abhi diya us ki amount likho — baqi vendor balance (udhar) mein jayega."}
             </p>
             {!isExtend && (
               <label className="mt-3 flex cursor-pointer items-start gap-2 rounded-md border border-border/80 bg-muted/40 p-3">

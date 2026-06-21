@@ -26,3 +26,12 @@ export function clampPaidAmount(subtotal: number, raw: string): number {
   if (!Number.isFinite(n) || n < 0) return 0;
   return Math.min(subtotal, Math.round(n * 100) / 100);
 }
+
+/** Derive stored terms from paid amount — no separate UI needed on GRN screen. */
+export function inferPurchasePaymentTerms(
+  subtotal: number,
+  paidAmount: number,
+): PurchasePaymentTerm {
+  if (subtotal > 0 && paidAmount >= subtotal) return "cash";
+  return "on_account";
+}
