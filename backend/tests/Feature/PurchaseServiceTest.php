@@ -135,7 +135,7 @@ class PurchaseServiceTest extends TestCase
         $this->assertCount(2, $updated->lines);
     }
 
-    public function test_closed_grn_cannot_append_without_reopen(): void
+    public function test_closed_grn_cannot_append_lines(): void
     {
         $vendor = Vendor::create(['name' => 'Wholesale', 'balance' => 0, 'is_active' => true]);
         $product = Product::create([

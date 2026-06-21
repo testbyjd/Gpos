@@ -60,7 +60,7 @@ class PurchaseService
     {
         if ($purchase->receiving_status !== 'open') {
             throw ValidationException::withMessages([
-                'purchase' => ['Yeh GRN band hai — pehle reopen karo, phir aur items add karo.'],
+                'purchase' => ['Yeh GRN band hai — aur items add nahi ho sakte.'],
             ]);
         }
 
@@ -87,13 +87,6 @@ class PurchaseService
 
             return $purchase->load(['vendor', 'lines.product']);
         });
-    }
-
-    public function reopen(Purchase $purchase): Purchase
-    {
-        $purchase->update(['receiving_status' => 'open']);
-
-        return $purchase->fresh(['vendor', 'lines.product']);
     }
 
     public function close(Purchase $purchase): Purchase

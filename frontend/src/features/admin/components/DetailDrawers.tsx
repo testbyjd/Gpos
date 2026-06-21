@@ -649,7 +649,7 @@ export function PurchaseDetailModal({
   const isOpen = grn.receiving_status === "open";
 
   async function handleCloseGrn() {
-    if (!window.confirm(`${grn.grn_no} band karni hai? Baad mein aur items ke liye reopen karna hoga.`)) return;
+    if (!window.confirm(`${grn.grn_no} band karni hai? Band hone ke baad aur items add nahi ho sakte.`)) return;
     setClosing(true);
     try {
       const res = await closePurchase(grn.id);
@@ -675,13 +675,15 @@ export function PurchaseDetailModal({
                 <p className="mt-1 text-sm text-muted-foreground">{new Date(grn.received_at).toLocaleString("en-PK")}</p>
               </div>
               <div className="flex flex-wrap items-center justify-end gap-2">
-                <Link
-                  href={`/purchases/new?extend=${grn.id}`}
-                  className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-semibold text-foreground transition-colors hover:bg-card-hover"
-                >
-                  <PackagePlus className="h-4 w-4" />
-                  {isOpen ? "Add more items" : "Extend GRN"}
-                </Link>
+                {isOpen && (
+                  <Link
+                    href={`/purchases/new?extend=${grn.id}`}
+                    className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-semibold text-foreground transition-colors hover:bg-card-hover"
+                  >
+                    <PackagePlus className="h-4 w-4" />
+                    Add more items
+                  </Link>
+                )}
                 {isOpen && (
                   <Button size="sm" variant="secondary" disabled={closing} onClick={handleCloseGrn}>
                     {closing ? "Closing…" : "Close GRN"}

@@ -6,11 +6,12 @@ import { Search, ScanLine } from "lucide-react";
 interface Props {
   value: string;
   onValueChange: (v: string) => void;
+  onScan?: (code: string) => void;
   inputRef?: RefObject<HTMLInputElement | null>;
   resultCount: number;
 }
 
-export function ProductSearch({ value, onValueChange, inputRef, resultCount }: Props) {
+export function ProductSearch({ value, onValueChange, onScan, inputRef, resultCount }: Props) {
   return (
     <div className="relative">
       <Search className="pointer-events-none absolute left-3.5 top-1/2 h-[1.125rem] w-[1.125rem] -translate-y-1/2 text-muted-foreground" />
@@ -18,6 +19,12 @@ export function ProductSearch({ value, onValueChange, inputRef, resultCount }: P
         ref={inputRef}
         value={value}
         onChange={(e) => onValueChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            onScan?.(e.currentTarget.value);
+          }
+        }}
         autoFocus
         placeholder="Search products by name or scan barcode…"
         className="h-12 w-full rounded-lg border border-border/80 bg-input pl-10 pr-28 text-sm font-medium text-foreground shadow-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/30"

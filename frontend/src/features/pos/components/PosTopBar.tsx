@@ -23,7 +23,7 @@ export function PosTopBar() {
   }
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-border/80 bg-surface/95 px-4 shadow-sm backdrop-blur">
+    <header className="relative z-40 flex h-14 shrink-0 items-center justify-between border-b border-border/80 bg-surface/95 px-4 shadow-sm backdrop-blur">
       <div className="flex items-center gap-3">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm shadow-primary/25">
           <Store className="h-5 w-5" />

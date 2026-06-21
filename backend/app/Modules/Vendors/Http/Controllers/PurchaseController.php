@@ -80,11 +80,6 @@ class PurchaseController extends Controller
         return response()->json(['data' => $purchase]);
     }
 
-    public function reopen(Purchase $purchase, PurchaseService $service): JsonResponse
-    {
-        return response()->json(['data' => $service->reopen($purchase)]);
-    }
-
     public function close(Purchase $purchase, PurchaseService $service): JsonResponse
     {
         return response()->json(['data' => $service->close($purchase)]);

@@ -1,8 +1,9 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ModalPortal } from "@/components/ui/modal-portal";
 import { cn } from "@/lib/utils";
 import { getStoredUser } from "@/lib/auth";
 import { getErrorMessage } from "@/lib/api";
@@ -62,6 +63,28 @@ export function TaskPanel({ anchorRef, onClose, onChanged }: TaskPanelProps) {
   const [assignedTo, setAssignedTo] = useState<number | "">("");
   const [dueAt, setDueAt] = useState("");
   const [saving, setSaving] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState<{ top: number; right: number } | null>(null);
+
+  useLayoutEffect(() => {
+    function updatePosition() {
+      const anchor = anchorRef.current;
+      if (!anchor) return;
+      const rect = anchor.getBoundingClientRect();
+      setPosition({
+        top: rect.bottom + 8,
+        right: Math.max(16, window.innerWidth - rect.right),
+      });
+    }
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [anchorRef]);
 
   function loadTasks() {
     setLoading(true);
@@ -88,10 +111,10 @@ export function TaskPanel({ anchorRef, onClose, onChanged }: TaskPanelProps) {
 
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
-      const root = anchorRef.current;
-      if (root && !root.contains(e.target as Node)) {
-        onClose();
-      }
+      const target = e.target as Node;
+      if (anchorRef.current?.contains(target)) return;
+      if (panelRef.current?.contains(target)) return;
+      onClose();
     }
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
@@ -149,9 +172,16 @@ export function TaskPanel({ anchorRef, onClose, onChanged }: TaskPanelProps) {
   }
 
   return (
-    <div
-      className="absolute right-0 top-full z-[120] mt-2 w-[min(100vw-2rem,380px)] overflow-hidden rounded-xl border border-border/80 bg-card shadow-xl"
-    >
+    <ModalPortal>
+      <div
+        ref={panelRef}
+        className="fixed z-[200] w-[min(100vw-2rem,380px)] overflow-hidden rounded-xl border border-border/80 bg-card shadow-2xl ring-1 ring-black/5"
+        style={
+          position
+            ? { top: position.top, right: position.right }
+            : { top: 0, right: 16, visibility: "hidden" as const }
+        }
+      >
       <div className="flex items-center justify-between border-b border-border/80 px-4 py-3">
         <div>
           <p className="font-black text-foreground">Tasks</p>
@@ -301,6 +331,7 @@ export function TaskPanel({ anchorRef, onClose, onChanged }: TaskPanelProps) {
           );
         })}
       </ul>
-    </div>
+      </div>
+    </ModalPortal>
   );
 }

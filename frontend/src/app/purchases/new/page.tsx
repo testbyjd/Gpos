@@ -32,7 +32,6 @@ import {
   listCategories,
   listProducts,
   listVendors,
-  reopenPurchase,
   type CategoryRow,
   type ProductRow,
   type PurchaseRow,
@@ -133,11 +132,11 @@ export default function NewPurchasePage() {
 
     setExtendLoading(true);
     getPurchase(Number(extendId))
-      .then(async (res) => {
-        let purchase = res.data;
+      .then((res) => {
+        const purchase = res.data;
         if (purchase.receiving_status !== "open") {
-          const reopened = await reopenPurchase(purchase.id);
-          purchase = reopened.data;
+          setLoadError(`${purchase.grn_no} band hai — aur items add nahi ho sakte.`);
+          return;
         }
         setExtendPurchase(purchase);
         if (purchase.vendor?.id) {

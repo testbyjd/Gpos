@@ -252,10 +252,6 @@ export function appendPurchaseLines(
   });
 }
 
-export function reopenPurchase(purchaseId: number) {
-  return apiFetch<{ data: PurchaseRow }>(`/purchases/${purchaseId}/reopen`, { method: "POST" });
-}
-
 export function closePurchase(purchaseId: number) {
   return apiFetch<{ data: PurchaseRow }>(`/purchases/${purchaseId}/close`, { method: "POST" });
 }

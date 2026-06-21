@@ -80,6 +80,27 @@ export function PosRegister() {
     });
   }
 
+  function scanBarcode(raw: string) {
+    const code = raw.trim();
+    if (!code) return;
+    if (catalogLoading || catalogError) {
+      showToast("Catalog load nahi hua — scan abhi nahi chalega.", "error");
+      return;
+    }
+    const product = products.find(
+      (p) => p.barcode && p.barcode.trim().toLowerCase() === code.toLowerCase(),
+    );
+    if (!product) {
+      showToast(`Barcode "${code}" catalog mein nahi mila.`, "error");
+      setQuery("");
+      searchRef.current?.focus();
+      return;
+    }
+    addProduct(product);
+    setQuery("");
+    searchRef.current?.focus();
+  }
+
   function changeQty(id: string, delta: number) {
     setLines((prev) =>
       prev
@@ -334,6 +355,7 @@ export function PosRegister() {
           <ProductSearch
             value={query}
             onValueChange={setQuery}
+            onScan={scanBarcode}
             inputRef={searchRef}
             resultCount={filtered.length}
           />
