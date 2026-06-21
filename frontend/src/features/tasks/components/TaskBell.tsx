@@ -18,7 +18,9 @@ export function TaskBell() {
         setOpenCount(res.open_assigned);
         setHighCount(res.open_high);
       })
-      .catch(() => {});
+      .catch(() => {
+        /* logged-in pages only; panel shows load errors */
+      });
   }, []);
 
   useEffect(() => {
@@ -33,13 +35,14 @@ export function TaskBell() {
         type="button"
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          "relative flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors hover:border-primary/40 hover:bg-card-hover hover:text-foreground",
+          "relative flex h-9 items-center gap-1.5 rounded-md border border-border bg-card px-2.5 text-muted-foreground transition-colors hover:border-primary/40 hover:bg-card-hover hover:text-foreground sm:px-3",
           open && "border-primary/40 text-primary",
         )}
         aria-label="Tasks"
-        title="Tasks"
+        title="Staff tasks"
       >
-        <Bell className="h-4 w-4" />
+        <Bell className="h-4 w-4 shrink-0" />
+        <span className="hidden text-xs font-bold sm:inline">Tasks</span>
         {openCount > 0 && (
           <span
             className={cn(

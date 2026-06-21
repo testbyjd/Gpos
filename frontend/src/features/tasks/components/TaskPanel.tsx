@@ -55,7 +55,10 @@ export function TaskPanel({ anchorRef, onClose, onChanged }: TaskPanelProps) {
         setTasks(res.data);
         setError(null);
       })
-      .catch((err) => setError(getErrorMessage(err, "Tasks load nahi hue.")))
+      .catch((err) => {
+        setTasks([]);
+        setError(getErrorMessage(err, "Tasks load nahi hue — server/migration check karo."));
+      })
       .finally(() => setLoading(false));
   }
 

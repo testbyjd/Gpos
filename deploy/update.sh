@@ -27,6 +27,12 @@ npm ci
 NEXT_PUBLIC_API_BASE_URL=/api/v1 npm run build
 chown -R www-data:www-data .next
 
+if ! rg -q "tasks/summary" "$APP_DIR/frontend/.next/static/chunks" 2>/dev/null; then
+  echo "[update] WARNING: Task UI not found in build — check npm run build output." >&2
+else
+  echo "[update] Task UI present in static bundle."
+fi
+
 echo "[update] Restart Next.js…"
 systemctl restart gpos-frontend
 systemctl is-active --quiet gpos-frontend && echo "[update] gpos-frontend running."
