@@ -6,6 +6,7 @@ import { Banknote, LayoutDashboard, LogOut, Store } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { getStoredUser, logout } from "@/lib/auth";
+import { TaskBell } from "@/features/tasks/components/TaskBell";
 import { CashCountModal } from "@/features/till/CashCountModal";
 import { Clock } from "./Clock";
 import { ConnectionStatus } from "./ConnectionStatus";
@@ -34,6 +35,7 @@ export function PosTopBar() {
       </div>
 
       <div className="flex items-center gap-3">
+        <TaskBell />
         <button
           type="button"
           onClick={() => setShowCount(true)}

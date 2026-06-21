@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppToast, useAppToast } from "@/components/ui/app-toast";
 import { useBillingConnection } from "@/lib/connection-status";
+import { cn } from "@/lib/utils";
 import { AlertTriangle } from "lucide-react";
 import { PosTopBar } from "./components/PosTopBar";
+import { CartSlideHandle } from "./components/CartSlideHandle";
 import { ProductSearch } from "./components/ProductSearch";
 import { CategoryChips } from "./components/CategoryChips";
 import { ProductGrid } from "./components/ProductGrid";
@@ -45,6 +47,7 @@ export function PosRegister() {
   const { connected: billingOnline } = useBillingConnection();
   const [payOpen, setPayOpen] = useState(false);
   const [saleResult, setSaleResult] = useState<SaleResult | null>(null);
+  const [cartOpen, setCartOpen] = useState(false);
 
   const searchRef = useRef<HTMLInputElement>(null);
   // Stable id for the current checkout so a retry can't create a duplicate sale.
@@ -325,9 +328,9 @@ export function PosRegister() {
     <div className="flex h-screen flex-col overflow-hidden bg-background">
       <PosTopBar />
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,0.34fr)_minmax(0,0.66fr)] overflow-hidden lg:grid-cols-[minmax(0,1fr)_500px] lg:grid-rows-none xl:grid-cols-[minmax(0,1fr)_560px] 2xl:grid-cols-[minmax(0,1fr)_620px]">
-        {/* Left: catalog */}
-        <section className="flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-border/70 p-3 lg:p-3.5">
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        {/* Left: catalog — full width on mobile when cart is slid away */}
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-r border-border/70 p-3 lg:p-3.5">
           <ProductSearch
             value={query}
             onValueChange={setQuery}
@@ -371,8 +374,23 @@ export function PosRegister() {
           </div>
         </section>
 
-        {/* Right: cart */}
-        <div className="flex h-full min-h-0 w-full overflow-hidden">
+        {/* Backdrop when cart open on mobile */}
+        {cartOpen && (
+          <button
+            type="button"
+            aria-label="Cart band karo"
+            className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+            onClick={() => setCartOpen(false)}
+          />
+        )}
+
+        {/* Right: cart — fixed slide-in on mobile, always visible on lg+ */}
+        <div
+          className={cn(
+            "fixed inset-y-0 right-0 z-50 flex h-full w-[min(100%,420px)] overflow-hidden border-l border-border/70 bg-background shadow-xl transition-transform duration-300 ease-out lg:relative lg:z-auto lg:w-[500px] lg:translate-x-0 lg:shadow-none xl:w-[560px] 2xl:w-[620px]",
+            cartOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0",
+          )}
+        >
           <CartPanel
             lines={lines}
             customers={customers}
@@ -392,6 +410,13 @@ export function PosRegister() {
             onResume={resumeCart}
           />
         </div>
+
+        <CartSlideHandle
+          open={cartOpen}
+          itemCount={lines.length}
+          total={total}
+          onToggle={() => setCartOpen((v) => !v)}
+        />
       </div>
 
       {/* Payment calculator */}

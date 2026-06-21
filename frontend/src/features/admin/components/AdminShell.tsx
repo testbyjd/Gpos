@@ -20,6 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { ConnectionStatus } from "@/features/pos/components/ConnectionStatus";
+import { TaskBell } from "@/features/tasks/components/TaskBell";
 import { getStoredUser, logout, type AuthUser } from "@/lib/auth";
 
 type Role = AuthUser["role"];
@@ -168,6 +169,7 @@ export function AdminShell({ title, eyebrow, actions, allowedRoles = ["owner", "
               </h1>
             </div>
             <div className="flex items-center gap-2">
+              <TaskBell />
               <ConnectionStatus />
               {actions}
               <ThemeToggle />
