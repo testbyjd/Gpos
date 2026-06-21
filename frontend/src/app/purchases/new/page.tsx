@@ -496,6 +496,13 @@ export default function NewPurchasePage() {
           categories={categories}
           onAdd={addLine}
           onClose={() => setScan(null)}
+          onCategoryAdded={(category) => {
+            setCategories((prev) =>
+              prev.some((c) => c.id === category.id)
+                ? prev
+                : [...prev, category].sort((a, b) => a.name.localeCompare(b.name)),
+            );
+          }}
         />
       )}
 

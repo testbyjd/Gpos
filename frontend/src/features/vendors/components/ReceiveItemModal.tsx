@@ -5,7 +5,8 @@ import { CalendarClock, PackageCheck, Sparkles, Tag, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn, formatMoney } from "@/lib/utils";
 import type { UnitType } from "@/features/pos/types";
-import type { CategoryRow } from "@/lib/admin-api";
+import { createCategory, type CategoryRow } from "@/lib/admin-api";
+import { getErrorMessage } from "@/lib/api";
 import { UNITS, newAverageCost, type PurchaseProduct } from "../data/purchasing";
 
 export interface DraftLine {
@@ -36,9 +37,10 @@ interface Props {
   categories: CategoryRow[];
   onAdd: (line: Omit<DraftLine, "id">) => void;
   onClose: () => void;
+  onCategoryAdded?: (category: CategoryRow) => void;
 }
 
-export function ReceiveItemModal({ barcode, existing, categories, onAdd, onClose }: Props) {
+export function ReceiveItemModal({ barcode, existing, categories, onAdd, onClose, onCategoryAdded }: Props) {
   const isNew = !existing;
 
   useEffect(() => {
@@ -49,11 +51,16 @@ export function ReceiveItemModal({ barcode, existing, categories, onAdd, onClose
     };
   }, []);
 
+  const [localCategories, setLocalCategories] = useState(categories);
   const [qty, setQty] = useState("");
   const [cost, setCost] = useState(existing ? String(existing.lastCost) : "");
   // New-product fields
   const [name, setName] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [showNewCategory, setShowNewCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
   const [unit, setUnit] = useState<UnitType>("pcs");
   const [sellPrice, setSellPrice] = useState("");
   // Optional fields
@@ -62,6 +69,32 @@ export function ReceiveItemModal({ barcode, existing, categories, onAdd, onClose
   const [promoPrice, setPromoPrice] = useState("");
   const [promoStart, setPromoStart] = useState("");
   const [promoEnd, setPromoEnd] = useState("");
+
+  useEffect(() => {
+    setLocalCategories(categories);
+  }, [categories]);
+
+  async function addCategory() {
+    const trimmed = newCategoryName.trim();
+    if (!trimmed) {
+      setCategoryError("Category name likho.");
+      return;
+    }
+    setAddingCategory(true);
+    setCategoryError(null);
+    try {
+      const res = await createCategory(trimmed);
+      setLocalCategories((prev) => [...prev, res.data].sort((a, b) => a.name.localeCompare(b.name)));
+      setCategoryId(String(res.data.id));
+      setNewCategoryName("");
+      setShowNewCategory(false);
+      onCategoryAdded?.(res.data);
+    } catch (err) {
+      setCategoryError(getErrorMessage(err, "Category add nahi hui."));
+    } finally {
+      setAddingCategory(false);
+    }
+  }
 
   const qtyNum = parseFloat(qty) || 0;
   const costNum = parseFloat(cost) || 0;
@@ -80,7 +113,7 @@ export function ReceiveItemModal({ barcode, existing, categories, onAdd, onClose
 
   function submit() {
     if (!valid) return;
-    const picked = categories.find((c) => String(c.id) === categoryId);
+    const picked = localCategories.find((c) => String(c.id) === categoryId);
     onAdd({
       barcode,
       name: resolvedName,
@@ -178,12 +211,48 @@ export function ReceiveItemModal({ barcode, existing, categories, onAdd, onClose
                   <span className={labelCls}>Category</span>
                   <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={inputCls}>
                     <option value="">Uncategorized</option>
-                    {categories.map((c) => (
+                    {localCategories.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
                       </option>
                     ))}
                   </select>
+                  {!showNewCategory ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowNewCategory(true)}
+                      className="mt-1.5 text-xs font-bold text-primary hover:underline"
+                    >
+                      + New category
+                    </button>
+                  ) : (
+                    <div className="mt-2 space-y-2">
+                      <input
+                        type="text"
+                        value={newCategoryName}
+                        onChange={(e) => setNewCategoryName(e.target.value)}
+                        placeholder="Category name"
+                        className={inputCls}
+                        autoFocus
+                      />
+                      <div className="flex gap-2">
+                        <Button type="button" size="sm" onClick={addCategory} disabled={addingCategory}>
+                          {addingCategory ? "..." : "Add"}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => {
+                            setShowNewCategory(false);
+                            setCategoryError(null);
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </label>
                 <label className="block">
                   <span className={labelCls}>Unit</span>
@@ -204,6 +273,9 @@ export function ReceiveItemModal({ barcode, existing, categories, onAdd, onClose
                   />
                 </label>
               </div>
+              {categoryError && (
+                <p className="text-xs font-bold text-danger">{categoryError}</p>
+              )}
             </div>
           )}
 
