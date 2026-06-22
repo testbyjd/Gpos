@@ -30,16 +30,16 @@ export function ProductGrid({ products, onAdd }: Props) {
             onClick={() => onAdd(p)}
             className="group flex items-stretch gap-2 rounded-lg border border-border/80 bg-card p-1.5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/45 hover:bg-card-hover hover:shadow-md active:translate-y-0 active:scale-[0.99]"
           >
-            <div className="relative size-[4.25rem] shrink-0 overflow-hidden rounded-md bg-muted shadow-inner ring-1 ring-border/40">
+            <div className="relative flex size-[4.25rem] shrink-0 items-center justify-center overflow-hidden rounded-md bg-white shadow-inner ring-1 ring-border/40">
               {p.imageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={resolveAssetUrl(p.imageUrl)}
                   alt=""
-                  className="block size-full min-h-full min-w-full object-cover object-center"
+                  className="max-h-full max-w-full object-contain object-center"
                 />
               ) : (
-                <div className="flex size-full items-center justify-center text-2xl">{p.emoji ?? "📦"}</div>
+                <div className="flex size-full items-center justify-center bg-muted text-2xl">{p.emoji ?? "📦"}</div>
               )}
             </div>
 
