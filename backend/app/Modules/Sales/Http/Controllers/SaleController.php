@@ -33,6 +33,45 @@ class SaleController extends Controller
         ]);
     }
 
+    public function discountSummary(): JsonResponse
+    {
+        $todayStart = now()->startOfDay();
+        $todayEnd = now()->endOfDay();
+        $monthStart = now()->startOfMonth()->startOfDay();
+
+        $todayQuery = Sale::query()
+            ->where('discount', '>', 0)
+            ->whereBetween('sold_at', [$todayStart, $todayEnd]);
+
+        $todaySales = (clone $todayQuery)
+            ->orderByDesc('sold_at')
+            ->limit(20)
+            ->get(['id', 'invoice_no', 'discount', 'discount_recipient_name', 'discount_reason', 'sold_at']);
+
+        $monthSales = Sale::query()
+            ->where('discount', '>', 0)
+            ->where('sold_at', '>=', $monthStart);
+
+        return response()->json([
+            'today' => [
+                'count' => (clone $todayQuery)->count(),
+                'discount_total' => (float) (clone $todayQuery)->sum('discount'),
+                'sales' => $todaySales->map(fn (Sale $sale) => [
+                    'id' => $sale->id,
+                    'invoice_no' => $sale->invoice_no,
+                    'discount' => (float) $sale->discount,
+                    'discount_recipient_name' => $sale->discount_recipient_name,
+                    'discount_reason' => $sale->discount_reason,
+                    'sold_at' => $sale->sold_at?->toIso8601String(),
+                ])->values(),
+            ],
+            'month' => [
+                'count' => (clone $monthSales)->count(),
+                'discount_total' => (float) (clone $monthSales)->sum('discount'),
+            ],
+        ]);
+    }
+
     public function show(Sale $sale): JsonResponse
     {
         $sale->load(['customer', 'cashier:id,name', 'lines.product:id,name,barcode,stock_qty,unit', 'payments']);

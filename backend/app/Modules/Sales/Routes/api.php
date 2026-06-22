@@ -13,6 +13,7 @@ Route::middleware('auth:sanctum')->prefix('till')->group(function () {
 // Sales history + invoice detail (owner/manager only — admin audit).
 Route::middleware(['auth:sanctum', 'role:owner,manager'])->prefix('sales')->group(function () {
     Route::get('/', [SaleController::class, 'index']);
+    Route::get('/discount-summary', [SaleController::class, 'discountSummary']);
     Route::get('/{sale}', [SaleController::class, 'show']);
 });
 

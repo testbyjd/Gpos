@@ -233,6 +233,29 @@ export function listSales(params: ListSalesParams = {}) {
   );
 }
 
+export interface SaleDiscountSummary {
+  today: {
+    count: number;
+    discount_total: number;
+    sales: Array<{
+      id: number;
+      invoice_no: string;
+      discount: number;
+      discount_recipient_name: string | null;
+      discount_reason: string | null;
+      sold_at: string;
+    }>;
+  };
+  month: {
+    count: number;
+    discount_total: number;
+  };
+}
+
+export function getSalesDiscountSummary() {
+  return apiFetch<SaleDiscountSummary>("/sales/discount-summary");
+}
+
 export function getSale(id: number) {
   return apiFetch<{ data: SaleDetail }>(`/sales/${id}`);
 }
