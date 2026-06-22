@@ -116,4 +116,72 @@ class SaleSyncTest extends TestCase
         $product->refresh();
         $this->assertEquals(1.000, (float) $product->stock_qty);
     }
+
+    public function test_discount_over_five_percent_requires_name_and_reason(): void
+    {
+        $cashier = User::factory()->cashier()->create();
+        $product = Product::create([
+            'name' => 'Chips', 'unit' => 'pcs', 'avg_cost' => 30,
+            'sell_price' => 100, 'stock_qty' => 10, 'low_stock_threshold' => 2, 'is_active' => true,
+        ]);
+
+        $base = [
+            'device_id' => 'register-1',
+            'sales' => [[
+                'client_id' => Str::uuid()->toString(),
+                'sold_at' => now()->toIso8601String(),
+                'subtotal' => 100,
+                'discount' => 10,
+                'total' => 90,
+                'lines' => [[
+                    'product_id' => $product->id,
+                    'qty' => 1,
+                    'unit_price' => 100,
+                    'line_total' => 100,
+                ]],
+                'payments' => [['method' => 'cash', 'amount' => 90]],
+            ]],
+        ];
+
+        $this->actingAs($cashier)
+            ->postJson('/api/v1/sync/push', $base)
+            ->assertStatus(409);
+
+        $base['sales'][0]['client_id'] = Str::uuid()->toString();
+        $base['sales'][0]['discount_recipient_name'] = 'Ahmed';
+        $base['sales'][0]['discount_reason'] = 'Gift to friend';
+
+        $this->actingAs($cashier)
+            ->postJson('/api/v1/sync/push', $base)
+            ->assertOk();
+    }
+
+    public function test_five_percent_discount_does_not_require_approval_fields(): void
+    {
+        $cashier = User::factory()->cashier()->create();
+        $product = Product::create([
+            'name' => 'Juice', 'unit' => 'pcs', 'avg_cost' => 30,
+            'sell_price' => 100, 'stock_qty' => 10, 'low_stock_threshold' => 2, 'is_active' => true,
+        ]);
+
+        $this->actingAs($cashier)
+            ->postJson('/api/v1/sync/push', [
+                'device_id' => 'register-1',
+                'sales' => [[
+                    'client_id' => Str::uuid()->toString(),
+                    'sold_at' => now()->toIso8601String(),
+                    'subtotal' => 100,
+                    'discount' => 5,
+                    'total' => 95,
+                    'lines' => [[
+                        'product_id' => $product->id,
+                        'qty' => 1,
+                        'unit_price' => 100,
+                        'line_total' => 100,
+                    ]],
+                    'payments' => [['method' => 'cash', 'amount' => 95]],
+                ]],
+            ])
+            ->assertOk();
+    }
 }

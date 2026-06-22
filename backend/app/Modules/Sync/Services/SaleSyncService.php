@@ -40,6 +40,8 @@ class SaleSyncService
         }
 
         return DB::transaction(function () use ($deviceId, $payload, $clientId, $user) {
+            $this->assertValidDiscount($payload);
+
             $sale = Sale::create([
                 'client_id' => $clientId,
                 'device_id' => $deviceId,
@@ -49,6 +51,12 @@ class SaleSyncService
                 'customer_id' => $payload['customer_id'] ?? null,
                 'subtotal' => $payload['subtotal'],
                 'discount' => $payload['discount'] ?? 0,
+                'discount_recipient_name' => isset($payload['discount_recipient_name'])
+                    ? trim((string) $payload['discount_recipient_name']) ?: null
+                    : null,
+                'discount_reason' => isset($payload['discount_reason'])
+                    ? trim((string) $payload['discount_reason']) ?: null
+                    : null,
                 'total' => $payload['total'],
                 'sold_at' => now(),
                 'synced_at' => now(),
@@ -124,6 +132,29 @@ class SaleSyncService
                 'invoice_no' => $sale->invoice_no,
             ];
         });
+    }
+
+    /** @param  array<string, mixed>  $payload */
+    private function assertValidDiscount(array $payload): void
+    {
+        $subtotal = (float) ($payload['subtotal'] ?? 0);
+        $discount = (float) ($payload['discount'] ?? 0);
+
+        if ($discount > $subtotal) {
+            throw new RuntimeException('Discount subtotal se zyada nahi ho sakta.');
+        }
+
+        if ($subtotal <= 0 || $discount <= 0) {
+            return;
+        }
+
+        if ($discount > ($subtotal * 0.05)) {
+            $name = trim((string) ($payload['discount_recipient_name'] ?? ''));
+            $reason = trim((string) ($payload['discount_reason'] ?? ''));
+            if ($name === '' || $reason === '') {
+                throw new RuntimeException('5% se zyada discount pe naam aur reason zaroori hain.');
+            }
+        }
     }
 
     /** @param  array<string, mixed>  $payload */

@@ -184,6 +184,8 @@ export interface SaleRow {
   cashier?: { id: number; name: string } | null;
   subtotal: string | number;
   discount: string | number;
+  discount_recipient_name?: string | null;
+  discount_reason?: string | null;
   total: string | number;
   sold_at: string;
   payments?: SalePayment[];

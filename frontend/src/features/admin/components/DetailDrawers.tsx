@@ -376,6 +376,16 @@ export function SaleDetailModal({
                   <SummaryCard label="Discount" value={formatMoney(Number(sale.discount))} />
                   <SummaryCard label="Total" value={formatMoney(Number(sale.total))} />
                 </div>
+                {Number(sale.discount) > 0 && (sale.discount_recipient_name || sale.discount_reason) && (
+                  <div className="mt-3 rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-sm">
+                    {sale.discount_recipient_name && (
+                      <p><span className="font-bold text-foreground">Given to:</span> {sale.discount_recipient_name}</p>
+                    )}
+                    {sale.discount_reason && (
+                      <p className="mt-1"><span className="font-bold text-foreground">Reason:</span> {sale.discount_reason}</p>
+                    )}
+                  </div>
+                )}
                 <SectionTitle>Payments</SectionTitle>
                 <DataTable
                   minWidth="320px"

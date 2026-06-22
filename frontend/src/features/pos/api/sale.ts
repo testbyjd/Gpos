@@ -11,6 +11,8 @@ interface SaleArgs {
   tendered: number;
   change: number;
   customerId: number | null;
+  discountRecipientName?: string;
+  discountReason?: string;
 }
 
 interface PushResult {
@@ -31,6 +33,8 @@ export async function submitSale(args: SaleArgs): Promise<{ invoiceNo: string }>
     customer_id: args.customerId,
     subtotal,
     discount: args.discount,
+    discount_recipient_name: args.discountRecipientName?.trim() || undefined,
+    discount_reason: args.discountReason?.trim() || undefined,
     total: args.total,
     lines: args.lines.map((line) => ({
       product_id: Number.isFinite(Number(line.product.id)) ? Number(line.product.id) : null,

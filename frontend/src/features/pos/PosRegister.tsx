@@ -16,6 +16,7 @@ import { SaleSuccessModal, type SaleResult } from "./components/SaleSuccessModal
 import { fetchCatalog } from "./api/catalog";
 import { fetchPosCustomers } from "./api/customers";
 import { submitSale } from "./api/sale";
+import { validateDiscountApproval } from "./discount";
 import { formatSyncError, syncCartWithCatalog } from "./api/syncCartPrices";
 import { recordSync } from "@/lib/sync-status";
 import { getErrorMessage } from "@/lib/api";
@@ -41,6 +42,8 @@ export function PosRegister() {
   const [customer, setCustomer] = useState("Walk-in Customer");
   const [customerId, setCustomerId] = useState<number | null>(null);
   const [discount, setDiscount] = useState(0);
+  const [discountRecipientName, setDiscountRecipientName] = useState("");
+  const [discountReason, setDiscountReason] = useState("");
   const [payment, setPayment] = useState<PaymentMethod>("cash");
   const [heldCarts, setHeldCarts] = useState<HeldCart[]>([]);
   const { toast, showToast, hideToast } = useAppToast();
@@ -136,6 +139,8 @@ export function PosRegister() {
   function resetSale() {
     setLines([]);
     setDiscount(0);
+    setDiscountRecipientName("");
+    setDiscountReason("");
     setCustomer("Walk-in Customer");
     setCustomerId(null);
     setPayment("cash");
@@ -160,6 +165,9 @@ export function PosRegister() {
         lines,
         customer,
         customerId,
+        discount,
+        discountRecipientName,
+        discountReason,
         heldAt: Date.now(),
       },
     ]);
@@ -173,11 +181,25 @@ export function PosRegister() {
     setLines(held.lines);
     setCustomer(held.customer);
     setCustomerId(held.customerId);
+    setDiscount(held.discount ?? 0);
+    setDiscountRecipientName(held.discountRecipientName ?? "");
+    setDiscountReason(held.discountReason ?? "");
     persistHeldCarts(heldCarts.filter((h) => h.id !== id));
   }
 
   async function checkout() {
     if (lines.length === 0) return;
+    const approvalError = validateDiscountApproval(
+      subtotal,
+      discount,
+      discountRecipientName,
+      discountReason,
+    );
+    if (approvalError) {
+      showToast(approvalError, "error");
+      setCartOpen(true);
+      return;
+    }
     if (!billingOnline) {
       showToast("Server se connection nahi — billing band. Online aane par dobara try karein.", "error");
       return;
@@ -230,6 +252,8 @@ export function PosRegister() {
         clientId: saleClientId.current ?? crypto.randomUUID(),
         lines: billLines,
         discount,
+        discountRecipientName,
+        discountReason,
         total: billTotal,
         method: payment,
         tendered,
@@ -420,6 +444,10 @@ export function PosRegister() {
             onCustomerChange={selectCustomer}
             discount={discount}
             onDiscountChange={setDiscount}
+            discountRecipientName={discountRecipientName}
+            onDiscountRecipientNameChange={setDiscountRecipientName}
+            discountReason={discountReason}
+            onDiscountReasonChange={setDiscountReason}
             payment={payment}
             onPaymentChange={setPayment}
             onQty={changeQty}

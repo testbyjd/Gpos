@@ -25,6 +25,8 @@ class SyncController extends Controller
             'sales.*.sold_at' => ['required', 'date'],
             'sales.*.subtotal' => ['required', 'numeric', 'min:0'],
             'sales.*.discount' => ['nullable', 'numeric', 'min:0'],
+            'sales.*.discount_recipient_name' => ['nullable', 'string', 'max:120'],
+            'sales.*.discount_reason' => ['nullable', 'string', 'max:255'],
             'sales.*.total' => ['required', 'numeric', 'min:0'],
             'sales.*.customer_id' => ['nullable', 'integer'],
             'sales.*.lines' => ['required', 'array', 'min:1'],

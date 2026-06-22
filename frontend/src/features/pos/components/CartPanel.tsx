@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn, formatMoney, formatQty } from "@/lib/utils";
+import { discountPercent, requiresDiscountApproval } from "../discount";
 import type { CartLine, HeldCart, PaymentMethod, PosCustomer, Product } from "../types";
 import { PaymentMethods } from "./PaymentMethods";
 
@@ -100,6 +101,10 @@ interface Props {
   onCustomerChange: (id: number | null) => void;
   discount: number;
   onDiscountChange: (d: number) => void;
+  discountRecipientName: string;
+  onDiscountRecipientNameChange: (value: string) => void;
+  discountReason: string;
+  onDiscountReasonChange: (value: string) => void;
   payment: PaymentMethod;
   onPaymentChange: (m: PaymentMethod) => void;
   onQty: (id: string, delta: number) => void;
@@ -115,12 +120,15 @@ interface Props {
 export function CartPanel(props: Props) {
   const {
     lines, customers, customerId, onCustomerChange, discount, onDiscountChange,
+    discountRecipientName, onDiscountRecipientNameChange, discountReason, onDiscountReasonChange,
     payment, onPaymentChange, onQty, onSetQty, onRemove, onClear, onHold,
     onCheckout, heldCarts, onResume,
   } = props;
 
   const subtotal = lines.reduce((s, l) => s + l.product.price * l.qty, 0);
   const total = Math.max(0, subtotal - discount);
+  const needsDiscountApproval = requiresDiscountApproval(subtotal, discount);
+  const discountPct = discountPercent(subtotal, discount);
   const itemCount = lines.reduce((s, l) => s + l.qty, 0);
   const empty = lines.length === 0;
 
@@ -280,12 +288,49 @@ export function CartPanel(props: Props) {
             <input
               type="number"
               min={0}
+              max={subtotal}
               value={discount || ""}
-              onChange={(e) => onDiscountChange(Number(e.target.value) || 0)}
+              onChange={(e) => {
+                const next = Number(e.target.value) || 0;
+                onDiscountChange(Math.min(subtotal, Math.max(0, next)));
+              }}
               placeholder="0"
               className="h-8 w-24 rounded-md border border-border bg-input px-2 text-right text-sm font-medium tabular-nums text-foreground shadow-inner focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25 lg:w-28"
             />
           </div>
+          {discount > 0 && (
+            <p className="mt-1 text-right text-[11px] tabular-nums text-muted-foreground">
+              {discountPct.toFixed(1)}% off
+            </p>
+          )}
+          {needsDiscountApproval && (
+            <div className="mt-3 space-y-2 rounded-md border border-warning/35 bg-warning/5 p-2.5">
+              <p className="text-[11px] font-bold text-warning">
+                5% se zyada discount — naam aur reason zaroori
+              </p>
+              <button
+                type="button"
+                onClick={() => onDiscountChange(Math.round(subtotal * 100) / 100)}
+                className="w-full rounded-md border border-dashed border-warning/40 py-1.5 text-xs font-bold text-warning hover:bg-warning/10"
+              >
+                Gift bill (100% off)
+              </button>
+              <input
+                type="text"
+                value={discountRecipientName}
+                onChange={(e) => onDiscountRecipientNameChange(e.target.value)}
+                placeholder="Kis ko diya? (naam)"
+                className="h-9 w-full rounded-md border border-border bg-input px-2.5 text-sm font-semibold text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
+              />
+              <input
+                type="text"
+                value={discountReason}
+                onChange={(e) => onDiscountReasonChange(e.target.value)}
+                placeholder="Reason (gift, staff, complaint…)"
+                className="h-9 w-full rounded-md border border-border bg-input px-2.5 text-sm font-semibold text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
+              />
+            </div>
+          )}
           <div className="mt-2 flex items-end justify-between border-t border-border/80 pt-2 lg:mt-3 lg:pt-3">
             <span className="pb-0.5 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Total</span>
             <span className="text-2xl font-black tabular-nums text-primary lg:text-3xl">

@@ -35,5 +35,8 @@ export interface HeldCart {
   lines: CartLine[];
   customer: string;
   customerId: number | null;
+  discount?: number;
+  discountRecipientName?: string;
+  discountReason?: string;
   heldAt: number;
 }

@@ -12,7 +12,8 @@ class Sale extends Model
 {
     protected $fillable = [
         'client_id', 'device_id', 'store_id', 'invoice_no', 'cashier_id',
-        'customer_id', 'subtotal', 'discount', 'total', 'sold_at', 'synced_at',
+        'customer_id', 'subtotal', 'discount', 'discount_recipient_name', 'discount_reason',
+        'total', 'sold_at', 'synced_at',
     ];
 
     protected function casts(): array
