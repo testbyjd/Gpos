@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, Download, Loader2, Printer, TrendingUp } from "lucide-react";
+import { AlertTriangle, CalendarDays, Download, Loader2, Printer, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FilterChips } from "@/components/ui/filter-chips";
 import { cn, formatMoney } from "@/lib/utils";
 import { getReports } from "@/lib/admin-api";
 import { getErrorMessage } from "@/lib/api";
+import { writeOffReasonLabel } from "@/features/inventory/components/WriteOffModal";
 import {
   AdminShell,
   DataTable,
@@ -109,7 +110,11 @@ export default function ReportsPage() {
       ["Report", range, `${from} to ${to}`],
       ["Gross sales", data.gross_sales],
       ["Gross profit", data.gross_profit],
+      ["Stock write-off loss", data.total_write_off_loss ?? 0],
       ["Net receivable", data.net_receivable],
+      [],
+      ["Write-off reason", "Qty", "Loss"],
+      ...(data.write_offs_by_reason ?? []).map((r) => [writeOffReasonLabel(r.reason), r.qty, r.loss]),
       [],
       ["Category", "Sales", "Cost", "Profit", "Margin %"],
       ...data.profit_by_category.map((r) => [r.category, r.sales, r.cost, r.profit, r.margin]),
@@ -199,19 +204,43 @@ export default function ReportsPage() {
           <p className="text-sm text-muted-foreground">{from} se {to} · {range}</p>
         </div>
         <div className="grid gap-4">
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {[
               ["Gross sales", data.gross_sales, "Live API"],
               ["Gross profit", data.gross_profit, "Avg cost basis"],
+              ["Stock loss", data.total_write_off_loss ?? 0, "Write-offs"],
               ["Net receivable", data.net_receivable, "Khata open"],
             ].map(([label, value, meta]) => (
               <PagePanel key={label} className="p-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-                <p className="mt-2 text-2xl font-black tabular-nums text-foreground">{formatMoney(Number(value))}</p>
+                <p className={cn(
+                  "mt-2 text-2xl font-black tabular-nums",
+                  label === "Stock loss" && Number(value) > 0 ? "text-danger" : "text-foreground",
+                )}>
+                  {formatMoney(Number(value))}
+                </p>
                 <p className="mt-2 text-xs font-semibold text-primary">{meta}</p>
               </PagePanel>
             ))}
           </div>
+
+          {(data.total_write_off_loss ?? 0) > 0 && (
+            <PagePanel>
+              <PanelHeader
+                title="Stock write-offs"
+                meta="Expired, damage, gift, theft"
+                actions={<AlertTriangle className="h-4 w-4 text-danger" />}
+              />
+              <DataTable
+                columns={["Reason", "Qty removed", "Loss value"]}
+                rows={(data.write_offs_by_reason ?? []).map((row) => [
+                  <span key="reason" className="font-bold text-foreground">{writeOffReasonLabel(row.reason)}</span>,
+                  <span key="qty" className="tabular-nums text-muted-foreground">{row.qty}</span>,
+                  <span key="loss" className="font-black tabular-nums text-danger">{formatMoney(row.loss)}</span>,
+                ])}
+              />
+            </PagePanel>
+          )}
 
           <PagePanel>
             <PanelHeader

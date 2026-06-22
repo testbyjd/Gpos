@@ -110,6 +110,31 @@ export function deleteProductImage(id: number) {
   return apiUpload<{ data: ProductRow }>(`/inventory/products/${id}/image`, new FormData(), "DELETE");
 }
 
+export interface StockWriteOffRow {
+  id: number;
+  product_id: number;
+  qty: number;
+  unit_cost: number;
+  loss_value: number;
+  reason: string;
+  note: string | null;
+  created_at: string;
+  product?: { id: number; name: string; unit: string; barcode?: string | null };
+  creator?: { id: number; name: string };
+}
+
+export function createStockWriteOff(data: {
+  product_id: number;
+  qty: number;
+  reason: string;
+  note?: string;
+}) {
+  return apiFetch<{ data: StockWriteOffRow; message: string }>("/inventory/write-offs", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
 export function listCustomers() {
   return apiFetch<{ data: CustomerRow[] }>("/customers");
 }
@@ -327,6 +352,18 @@ export function getReports(from?: string, to?: string) {
     gross_sales: number;
     gross_profit: number;
     net_receivable: number;
+    total_write_off_loss: number;
+    write_offs_by_reason: Array<{ reason: string; qty: number; loss: number }>;
+    recent_write_offs: Array<{
+      id: number;
+      product: string | null;
+      unit: string | null;
+      qty: number;
+      loss_value: number;
+      reason: string;
+      note: string | null;
+      created_at: string;
+    }>;
     payment_breakdown: Array<{ method: string; amount: number }>;
     profit_by_category: Array<{ category: string; sales: number; cost: number; profit: number; margin: number }>;
     top_items: Array<{ name: string; qty: number; unit: string; amount: number }>;

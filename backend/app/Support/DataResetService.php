@@ -21,6 +21,7 @@ class DataResetService
         'purchases',
         'vendor_payments',
         'customer_ledger_entries',
+        'stock_write_offs',
         'stock_movements',
         'products',
         'categories',

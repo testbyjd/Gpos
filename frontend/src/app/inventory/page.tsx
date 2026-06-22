@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CalendarClock, Download, Pencil, Plus, Upload } from "lucide-react";
+import { CalendarClock, Download, MinusCircle, Pencil, Plus, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AppToast, useAppToast } from "@/components/ui/app-toast";
 import { SearchInput } from "@/components/ui/search-input";
@@ -13,6 +13,7 @@ import { listCategories, listProducts, type CategoryRow, type ProductRow } from 
 import { getErrorMessage } from "@/lib/api";
 import { CategoryFormModal } from "@/features/admin/components/AdminActionModals";
 import { ProductFormModal } from "@/features/admin/components/ProductFormModal";
+import { WriteOffModal } from "@/features/inventory/components/WriteOffModal";
 import {
   AdminShell,
   DataTable,
@@ -70,6 +71,7 @@ export default function InventoryPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [formProduct, setFormProduct] = useState<ProductRow | null | "new">(null);
+  const [writeOffProduct, setWriteOffProduct] = useState<ProductRow | null>(null);
   const [showAddCategory, setShowAddCategory] = useState(false);
 
   const loadProducts = useCallback(() => {
@@ -104,6 +106,12 @@ export default function InventoryPage() {
     });
     showToast(formProduct === "new" ? `"${product.name}" add ho gaya.` : `"${product.name}" update ho gaya.`, "success");
     setFormProduct(null);
+  }
+
+  function handleWriteOffSaved(product: ProductRow, lossValue: number) {
+    setProducts((prev) => prev.map((p) => (p.id === product.id ? product : p)));
+    showToast(`"${product.name}" write-off — loss ${formatMoney(lossValue)}`, "success");
+    setWriteOffProduct(null);
   }
 
   const filterCategories = useMemo(
@@ -193,15 +201,25 @@ export default function InventoryPage() {
                 <span key="price" className="font-bold tabular-nums text-primary">{formatMoney(Number(p.sell_price))}</span>,
                 <span key="expiry">{expiryPill(p.expiry_date)}</span>,
                 <StatusPill key="state" tone={isLow ? "warn" : "good"}>{isLow ? "Low" : "OK"}</StatusPill>,
-                <button
-                  key="edit"
-                  type="button"
-                  onClick={() => setFormProduct(p)}
-                  aria-label={`Edit ${p.name}`}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
-                >
-                  <Pencil className="h-4 w-4" />
-                </button>,
+                <div key="actions" className="flex justify-end gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setWriteOffProduct(p)}
+                    aria-label={`Write off ${p.name}`}
+                    title="Write-off (expire / gift / damage)"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-danger/10 hover:text-danger"
+                  >
+                    <MinusCircle className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormProduct(p)}
+                    aria-label={`Edit ${p.name}`}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                </div>,
               ];
             })}
           />
@@ -242,6 +260,14 @@ export default function InventoryPage() {
           onClose={() => setFormProduct(null)}
           onSaved={handleSaved}
           onCategoryAdded={handleCategorySaved}
+        />
+      )}
+
+      {writeOffProduct && (
+        <WriteOffModal
+          product={writeOffProduct}
+          onClose={() => setWriteOffProduct(null)}
+          onSaved={handleWriteOffSaved}
         />
       )}
 

@@ -4,6 +4,7 @@ namespace App\Modules\Reports\Http\Controllers;
 
 use App\Modules\Customers\Models\Customer;
 use App\Modules\Inventory\Models\Product;
+use App\Modules\Inventory\Models\StockWriteOff;
 use App\Modules\Sales\Models\Sale;
 use App\Modules\Sales\Models\SaleLine;
 use App\Modules\Sales\Models\SalePayment;
@@ -103,11 +104,42 @@ class ReportController extends Controller
                 'amount' => (float) $row->amount,
             ]);
 
+        $writeOffQuery = StockWriteOff::query()->whereBetween('created_at', [$from, $to]);
+        $writeOffLoss = (float) (clone $writeOffQuery)->sum('loss_value');
+        $writeOffsByReason = (clone $writeOffQuery)
+            ->selectRaw('reason, SUM(qty) as qty, SUM(loss_value) as loss')
+            ->groupBy('reason')
+            ->get()
+            ->map(fn ($row) => [
+                'reason' => $row->reason,
+                'qty' => (float) $row->qty,
+                'loss' => (float) $row->loss,
+            ]);
+        $recentWriteOffs = StockWriteOff::query()
+            ->with('product:id,name,unit')
+            ->whereBetween('created_at', [$from, $to])
+            ->latest()
+            ->limit(10)
+            ->get()
+            ->map(fn (StockWriteOff $row) => [
+                'id' => $row->id,
+                'product' => $row->product?->name,
+                'unit' => $row->product?->unit,
+                'qty' => (float) $row->qty,
+                'loss_value' => (float) $row->loss_value,
+                'reason' => $row->reason,
+                'note' => $row->note,
+                'created_at' => $row->created_at?->toIso8601String(),
+            ]);
+
         return response()->json([
             'range' => ['from' => $from->toDateString(), 'to' => $to->toDateString()],
             'gross_sales' => (float) Sale::whereBetween('sold_at', [$from, $to])->sum('total'),
             'gross_profit' => (float) $profit->sum('profit'),
             'net_receivable' => (float) Customer::sum('balance'),
+            'total_write_off_loss' => $writeOffLoss,
+            'write_offs_by_reason' => $writeOffsByReason,
+            'recent_write_offs' => $recentWriteOffs,
             'payment_breakdown' => $payments,
             'profit_by_category' => $profit,
             'top_items' => $topItems,
