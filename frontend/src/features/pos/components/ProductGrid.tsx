@@ -28,10 +28,10 @@ export function ProductGrid({ products, onAdd }: Props) {
           <button
             key={p.id}
             onClick={() => onAdd(p)}
-            className="group flex min-h-[8.75rem] flex-col rounded-lg border border-border/80 bg-card p-2.5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/45 hover:bg-card-hover hover:shadow-md active:translate-y-0 active:scale-[0.99]"
+            className="group flex flex-col gap-1 rounded-lg border border-border/80 bg-card p-2 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/45 hover:bg-card-hover hover:shadow-md active:translate-y-0 active:scale-[0.99]"
           >
-            <div className="mb-2 flex items-start justify-between gap-2">
-              <span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-md bg-muted text-2xl shadow-inner">
+            <div className="relative">
+              <span className="flex h-[4.5rem] w-full items-center justify-center overflow-hidden rounded-md bg-muted text-2xl shadow-inner">
                 {p.imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -45,23 +45,23 @@ export function ProductGrid({ products, onAdd }: Props) {
               </span>
               <span
                 className={cn(
-                  "max-w-[5.5rem] truncate rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-4",
+                  "absolute right-1 top-1 max-w-[calc(100%-0.5rem)] truncate rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-4 shadow-sm",
                   low
                     ? "bg-warning/15 text-warning ring-1 ring-warning/20"
-                    : "bg-muted text-muted-foreground ring-1 ring-border/70",
+                    : "bg-card/95 text-muted-foreground ring-1 ring-border/70 backdrop-blur-sm",
                 )}
               >
                 {low ? "Low" : `${p.stock}`} {p.unit}
               </span>
             </div>
-            <span className="line-clamp-2 min-h-[2.35rem] text-[13px] font-semibold leading-5 text-foreground">
+            <span className="line-clamp-2 text-[12px] font-semibold leading-4 text-foreground">
               {p.name}
             </span>
-            <div className="mt-auto flex items-end justify-between gap-2 pt-2">
+            <div className="flex items-end justify-between gap-1">
               <span className="text-sm font-black tabular-nums text-primary">
                 {formatMoney(p.price)}
               </span>
-              <span className="text-xs text-muted-foreground">/{p.unit}</span>
+              <span className="text-[11px] text-muted-foreground">/{p.unit}</span>
             </div>
           </button>
         );
