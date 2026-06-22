@@ -21,7 +21,7 @@ export function ProductGrid({ products, onAdd }: Props) {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(12.5rem,1fr))] gap-1.5">
       {products.map((p) => {
         const low = p.stock <= 10;
         return (

@@ -392,16 +392,20 @@ export function PosRegister() {
           </div>
           <div className="mt-2.5 flex-1 overflow-y-auto pr-1">
             {catalogLoading ? (
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-                {Array.from({ length: 10 }).map((_, i) => (
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(12.5rem,1fr))] gap-1.5">
+                {Array.from({ length: 12 }).map((_, i) => (
                   <div
                     key={i}
-                    className="min-h-[8.75rem] animate-pulse rounded-lg border border-border/80 bg-card p-2.5"
+                    className="flex animate-pulse items-stretch gap-2 rounded-lg border border-border/80 bg-card p-1.5"
                   >
-                    <div className="mb-3 h-9 w-9 rounded-md bg-muted" />
-                    <div className="h-4 rounded bg-muted" />
-                    <div className="mt-2 h-4 w-2/3 rounded bg-muted" />
-                    <div className="mt-8 h-5 w-1/2 rounded bg-muted" />
+                    <div className="h-[4.25rem] w-[4.25rem] shrink-0 rounded-md bg-muted" />
+                    <div className="flex flex-1 flex-col justify-between py-0.5">
+                      <div className="space-y-2">
+                        <div className="h-4 w-full rounded bg-muted" />
+                        <div className="h-3 w-16 rounded-full bg-muted" />
+                      </div>
+                      <div className="h-4 w-20 rounded bg-muted" />
+                    </div>
                   </div>
                 ))}
               </div>
