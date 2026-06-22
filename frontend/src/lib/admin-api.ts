@@ -376,6 +376,9 @@ export function getReports(from?: string, to?: string) {
     range?: { from: string; to: string };
     gross_sales: number;
     gross_profit: number;
+    total_discount: number;
+    discount_count: number;
+    discounts_by_reason: Array<{ reason: string; count: number; amount: number }>;
     net_receivable: number;
     total_write_off_loss: number;
     write_offs_by_reason: Array<{ reason: string; qty: number; loss: number }>;

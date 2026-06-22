@@ -115,6 +115,26 @@ class ReportController extends Controller
                 'qty' => (float) $row->qty,
                 'loss' => (float) $row->loss,
             ]);
+
+        $discountQuery = Sale::query()
+            ->where('discount', '>', 0)
+            ->whereBetween('sold_at', [$from, $to]);
+        $totalDiscount = (float) (clone $discountQuery)->sum('discount');
+        $discountCount = (clone $discountQuery)->count();
+        $discountsByReason = Sale::query()
+            ->where('discount', '>', 0)
+            ->whereBetween('sold_at', [$from, $to])
+            ->selectRaw("COALESCE(NULLIF(TRIM(discount_reason), ''), 'No reason') as reason")
+            ->selectRaw('COUNT(*) as count')
+            ->selectRaw('SUM(discount) as amount')
+            ->groupBy('reason')
+            ->orderByDesc('amount')
+            ->get()
+            ->map(fn ($row) => [
+                'reason' => $row->reason,
+                'count' => (int) $row->count,
+                'amount' => (float) $row->amount,
+            ]);
         $recentWriteOffs = StockWriteOff::query()
             ->with('product:id,name,unit')
             ->whereBetween('created_at', [$from, $to])
@@ -136,6 +156,9 @@ class ReportController extends Controller
             'range' => ['from' => $from->toDateString(), 'to' => $to->toDateString()],
             'gross_sales' => (float) Sale::whereBetween('sold_at', [$from, $to])->sum('total'),
             'gross_profit' => (float) $profit->sum('profit'),
+            'total_discount' => $totalDiscount,
+            'discount_count' => $discountCount,
+            'discounts_by_reason' => $discountsByReason,
             'net_receivable' => (float) Customer::sum('balance'),
             'total_write_off_loss' => $writeOffLoss,
             'write_offs_by_reason' => $writeOffsByReason,

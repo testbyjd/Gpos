@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CalendarDays, Download, Loader2, Printer, TrendingUp } from "lucide-react";
+import { AlertTriangle, CalendarDays, Download, Loader2, Printer, Tag, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FilterChips } from "@/components/ui/filter-chips";
 import { cn, formatMoney } from "@/lib/utils";
@@ -110,11 +110,16 @@ export default function ReportsPage() {
       ["Report", range, `${from} to ${to}`],
       ["Gross sales", data.gross_sales],
       ["Gross profit", data.gross_profit],
+      ["Total discount", data.total_discount ?? 0],
+      ["Discount bills", data.discount_count ?? 0],
       ["Stock write-off loss", data.total_write_off_loss ?? 0],
       ["Net receivable", data.net_receivable],
       [],
       ["Write-off reason", "Qty", "Loss"],
       ...(data.write_offs_by_reason ?? []).map((r) => [writeOffReasonLabel(r.reason), r.qty, r.loss]),
+      [],
+      ["Discount reason", "Bills", "Amount"],
+      ...(data.discounts_by_reason ?? []).map((r) => [r.reason, r.count, r.amount]),
       [],
       ["Category", "Sales", "Cost", "Profit", "Margin %"],
       ...data.profit_by_category.map((r) => [r.category, r.sales, r.cost, r.profit, r.margin]),
@@ -204,25 +209,54 @@ export default function ReportsPage() {
           <p className="text-sm text-muted-foreground">{from} se {to} · {range}</p>
         </div>
         <div className="grid gap-4">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             {[
               ["Gross sales", data.gross_sales, "Live API"],
               ["Gross profit", data.gross_profit, "Avg cost basis"],
+              ["Total discount", data.total_discount ?? 0, `${data.discount_count ?? 0} bill(s)`],
               ["Stock loss", data.total_write_off_loss ?? 0, "Write-offs"],
               ["Net receivable", data.net_receivable, "Khata open"],
-            ].map(([label, value, meta]) => (
+            ].map(([label, value, meta]) => {
+              const valueTone =
+                label === "Stock loss" && Number(value) > 0
+                  ? "text-danger"
+                  : label === "Total discount" && Number(value) > 0
+                    ? "text-warning"
+                    : "text-foreground";
+              const metaTone =
+                label === "Total discount" && Number(value) > 0 ? "text-warning" : "text-primary";
+
+              return (
               <PagePanel key={label} className="p-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-                <p className={cn(
-                  "mt-2 text-2xl font-black tabular-nums",
-                  label === "Stock loss" && Number(value) > 0 ? "text-danger" : "text-foreground",
-                )}>
+                <p className={cn("mt-2 text-2xl font-black tabular-nums", valueTone)}>
                   {formatMoney(Number(value))}
                 </p>
-                <p className="mt-2 text-xs font-semibold text-primary">{meta}</p>
+                <p className={cn("mt-2 text-xs font-semibold", metaTone)}>
+                  {meta}
+                </p>
               </PagePanel>
-            ))}
+              );
+            })}
           </div>
+
+          {(data.total_discount ?? 0) > 0 && (
+            <PagePanel>
+              <PanelHeader
+                title="POS discounts"
+                meta="Selected range · reason wise"
+                actions={<Tag className="h-4 w-4 text-warning" />}
+              />
+              <DataTable
+                columns={["Reason", "Bills", "Discount amount"]}
+                rows={(data.discounts_by_reason ?? []).map((row) => [
+                  <span key="reason" className="font-bold text-foreground">{row.reason}</span>,
+                  <span key="count" className="tabular-nums text-muted-foreground">{row.count}</span>,
+                  <span key="amount" className="font-black tabular-nums text-warning">{formatMoney(row.amount)}</span>,
+                ])}
+              />
+            </PagePanel>
+          )}
 
           {(data.total_write_off_loss ?? 0) > 0 && (
             <PagePanel>

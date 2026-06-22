@@ -184,28 +184,6 @@ export default function SalesPage() {
                   </div>
                 </div>
               </div>
-              {(discountSummary?.today.sales.length ?? 0) > 0 && (
-                <div className="mt-3 max-h-28 space-y-1.5 overflow-y-auto border-t border-border/70 pt-2">
-                  {discountSummary!.today.sales.map((s) => (
-                    <button
-                      key={s.id}
-                      type="button"
-                      onClick={() => setSaleModal({ id: s.id })}
-                      className="flex w-full items-start justify-between gap-2 rounded-md px-1 py-0.5 text-left hover:bg-muted/60"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-xs font-bold text-primary">{s.invoice_no}</p>
-                        <p className="truncate text-[11px] text-muted-foreground">
-                          {[s.discount_recipient_name, s.discount_reason].filter(Boolean).join(" · ") || "—"}
-                        </p>
-                      </div>
-                      <span className="shrink-0 text-xs font-black tabular-nums text-warning">
-                        -{formatMoney(s.discount)}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
             </PagePanel>
           </div>
 
