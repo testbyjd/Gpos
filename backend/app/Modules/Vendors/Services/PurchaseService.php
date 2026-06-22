@@ -7,6 +7,7 @@ use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Vendors\Models\Purchase;
 use App\Modules\Vendors\Models\PurchaseLine;
 use App\Modules\Vendors\Models\Vendor;
+use App\Modules\Vendors\Models\VendorPayment;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -52,6 +53,8 @@ class PurchaseService
             $vendor->balance = bcadd((string) $vendor->balance, (string) $balance, 2);
             $vendor->save();
 
+            $this->logVendorPayment($vendor, $purchase, $paid, $userId, 'Paid at GRN');
+
             return $purchase->load(['vendor', 'lines.product']);
         });
     }
@@ -84,6 +87,8 @@ class PurchaseService
             $vendor = Vendor::lockForUpdate()->findOrFail($purchase->vendor_id);
             $vendor->balance = bcadd((string) $vendor->balance, $vendorDelta, 2);
             $vendor->save();
+
+            $this->logVendorPayment($vendor, $purchase, $additionalPaid, $userId, 'Paid on GRN extension');
 
             return $purchase->load(['vendor', 'lines.product']);
         });
@@ -161,5 +166,25 @@ class PurchaseService
         ]);
 
         return $qty * $unitCost;
+    }
+
+    private function logVendorPayment(
+        Vendor $vendor,
+        Purchase $purchase,
+        float $amount,
+        ?int $userId,
+        string $note,
+    ): void {
+        if ($amount <= 0) {
+            return;
+        }
+
+        VendorPayment::create([
+            'vendor_id' => $vendor->id,
+            'purchase_id' => $purchase->id,
+            'amount' => round($amount, 2),
+            'note' => $note,
+            'created_by' => $userId,
+        ]);
     }
 }

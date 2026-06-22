@@ -72,6 +72,11 @@ class PurchaseServiceTest extends TestCase
         $this->assertEquals(40.000, (float) $product->stock_qty);
         // subtotal 30*240 = 7200, paid 5000 -> balance 2200 owed to vendor
         $this->assertEquals(2200.00, (float) $vendor->balance);
+
+        $payment = \App\Modules\Vendors\Models\VendorPayment::first();
+        $this->assertNotNull($payment);
+        $this->assertEquals(5000.00, (float) $payment->amount);
+        $this->assertSame('Paid at GRN', $payment->note);
     }
 
     public function test_purchase_can_create_new_product_on_the_fly(): void
@@ -92,6 +97,8 @@ class PurchaseServiceTest extends TestCase
                 ],
             ],
         ]);
+
+        $this->assertSame(0, \App\Modules\Vendors\Models\VendorPayment::count());
 
         $product = Product::where('name', 'Daal Chana')->firstOrFail();
 
@@ -128,11 +135,15 @@ class PurchaseServiceTest extends TestCase
 
         $updated = $service->appendLines($purchase, [
             ['product_id' => $product->id, 'qty' => 150, 'unit_cost' => 112],
-        ]);
+        ], 5000);
 
         $this->assertEquals(250.000, (float) $product->fresh()->stock_qty);
         $this->assertEquals(27800.00, (float) $updated->subtotal); // 100*110 + 150*112
         $this->assertCount(2, $updated->lines);
+
+        $extensionPayment = \App\Modules\Vendors\Models\VendorPayment::where('note', 'Paid on GRN extension')->first();
+        $this->assertNotNull($extensionPayment);
+        $this->assertEquals(5000.00, (float) $extensionPayment->amount);
     }
 
     public function test_closed_grn_cannot_append_lines(): void
