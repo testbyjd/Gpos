@@ -4,10 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AppToast, useAppToast } from "@/components/ui/app-toast";
 import { useBillingConnection } from "@/lib/connection-status";
 import { cn } from "@/lib/utils";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import { PosTopBar } from "./components/PosTopBar";
 import { CartSlideHandle } from "./components/CartSlideHandle";
 import { ProductSearch } from "./components/ProductSearch";
+import { SaleQuickAdd } from "./components/SaleQuickAdd";
 import { CategoryChips } from "./components/CategoryChips";
 import { ProductGrid } from "./components/ProductGrid";
 import { CartPanel } from "./components/CartPanel";
@@ -24,6 +25,31 @@ import type { CartLine, HeldCart, PaymentMethod, Product, PosCustomer } from "./
 
 const CATALOG_CACHE_KEY = "gpos.pos.catalog.v1";
 const HELD_CARTS_KEY = "gpos.pos.heldCarts.v1";
+const PRODUCTS_PANEL_KEY = "gpos.pos.productsPanelOpen.v1";
+
+function readProductsPanelOpen(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(PRODUCTS_PANEL_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function productMatchesQuery(p: Product, raw: string) {
+  const q = raw.trim().toLowerCase();
+  if (!q) return true;
+  return (
+    p.name.toLowerCase().includes(q) ||
+    (p.barcode?.toLowerCase().includes(q) ?? false)
+  );
+}
+
+function findByBarcode(products: Product[], code: string) {
+  const c = code.trim().toLowerCase();
+  if (!c) return undefined;
+  return products.find((p) => p.barcode?.trim().toLowerCase() === c);
+}
 
 interface CatalogCache {
   products: Product[];
@@ -35,7 +61,8 @@ export function PosRegister() {
   const [categories, setCategories] = useState<readonly string[]>(["All"]);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState(false);
-  const [query, setQuery] = useState("");
+  const [catalogQuery, setCatalogQuery] = useState("");
+  const [saleQuery, setSaleQuery] = useState("");
   const [category, setCategory] = useState<string>("All");
   const [lines, setLines] = useState<CartLine[]>([]);
   const [customers, setCustomers] = useState<PosCustomer[]>([]);
@@ -51,25 +78,31 @@ export function PosRegister() {
   const [payOpen, setPayOpen] = useState(false);
   const [saleResult, setSaleResult] = useState<SaleResult | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
+  const [productsOpen, setProductsOpen] = useState(readProductsPanelOpen);
+  const [isDesktop, setIsDesktop] = useState(false);
 
-  const searchRef = useRef<HTMLInputElement>(null);
+  const saleSearchRef = useRef<HTMLInputElement>(null);
+  const catalogSearchRef = useRef<HTMLInputElement>(null);
   // Stable id for the current checkout so a retry can't create a duplicate sale.
   const saleClientId = useRef<string | null>(null);
 
   const subtotal = lines.reduce((s, l) => s + l.product.price * l.qty, 0);
   const total = Math.max(0, subtotal - discount);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+  const filteredCatalog = useMemo(() => {
+    const q = catalogQuery.trim().toLowerCase();
     return products.filter((p) => {
       const inCat = category === "All" || p.category === category;
-      const inQuery =
-        !q ||
-        p.name.toLowerCase().includes(q) ||
-        p.barcode?.includes(q);
+      const inQuery = !q || productMatchesQuery(p, q);
       return inCat && inQuery;
     });
-  }, [query, category, products]);
+  }, [catalogQuery, category, products]);
+
+  const saleSearchResults = useMemo(() => {
+    const q = saleQuery.trim();
+    if (!q) return [];
+    return products.filter((p) => productMatchesQuery(p, q)).slice(0, 20);
+  }, [saleQuery, products]);
 
   function addProduct(p: Product) {
     setLines((prev) => {
@@ -83,25 +116,49 @@ export function PosRegister() {
     });
   }
 
-  function scanBarcode(raw: string) {
+  function pickSaleProduct(p: Product) {
+    addProduct(p);
+    setSaleQuery("");
+    saleSearchRef.current?.focus();
+  }
+
+  function submitSaleSearch(raw: string) {
+    const code = raw.trim();
+    if (!code) return;
+    if (catalogLoading || catalogError) {
+      showToast("Catalog load nahi hua — abhi add nahi ho sakta.", "error");
+      return;
+    }
+    const byBarcode = findByBarcode(products, code);
+    if (byBarcode) {
+      pickSaleProduct(byBarcode);
+      return;
+    }
+    const matches = products.filter((p) => productMatchesQuery(p, code));
+    if (matches.length === 1) {
+      pickSaleProduct(matches[0]);
+      return;
+    }
+    setSaleQuery(code);
+  }
+
+  function scanCatalogBarcode(raw: string) {
     const code = raw.trim();
     if (!code) return;
     if (catalogLoading || catalogError) {
       showToast("Catalog load nahi hua — scan abhi nahi chalega.", "error");
       return;
     }
-    const product = products.find(
-      (p) => p.barcode && p.barcode.trim().toLowerCase() === code.toLowerCase(),
-    );
+    const product = findByBarcode(products, code);
     if (!product) {
       showToast(`Barcode "${code}" catalog mein nahi mila.`, "error");
-      setQuery("");
-      searchRef.current?.focus();
+      setCatalogQuery("");
+      catalogSearchRef.current?.focus();
       return;
     }
     addProduct(product);
-    setQuery("");
-    searchRef.current?.focus();
+    setCatalogQuery("");
+    catalogSearchRef.current?.focus();
   }
 
   function changeQty(id: string, delta: number) {
@@ -282,16 +339,25 @@ export function PosRegister() {
 
   function startNewSale() {
     setSaleResult(null);
-    searchRef.current?.focus();
+    saleSearchRef.current?.focus();
   }
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const sync = () => setIsDesktop(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (payOpen || saleResult) return; // an open modal owns the keyboard
       if (e.key === "F2") {
         e.preventDefault();
-        searchRef.current?.focus();
-        searchRef.current?.select();
+        if (!isDesktop) setCartOpen(true);
+        saleSearchRef.current?.focus();
+        saleSearchRef.current?.select();
       } else if (e.key === "F4") {
         e.preventDefault();
         holdCart();
@@ -303,7 +369,15 @@ export function PosRegister() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lines, discount, customer, heldCarts, payOpen, saleResult]);
+  }, [lines, discount, customer, heldCarts, payOpen, saleResult, isDesktop]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(PRODUCTS_PANEL_KEY, productsOpen ? "1" : "0");
+    } catch {
+      /* ignore quota errors */
+    }
+  }, [productsOpen]);
 
   useEffect(() => {
     try {
@@ -369,59 +443,95 @@ export function PosRegister() {
     };
   }, []);
 
+  const catalogBody = catalogLoading ? (
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-1.5">
+      {Array.from({ length: 12 }).map((_, i) => (
+        <div
+          key={i}
+          className="flex animate-pulse items-stretch gap-2 rounded-lg border border-border/80 bg-card p-1.5"
+        >
+          <div className="h-[4.25rem] w-[4.25rem] shrink-0 rounded-md bg-muted" />
+          <div className="flex flex-1 flex-col justify-between py-0.5">
+            <div className="space-y-2">
+              <div className="h-4 w-full rounded bg-muted" />
+              <div className="h-3 w-16 rounded-full bg-muted" />
+            </div>
+            <div className="h-4 w-20 rounded bg-muted" />
+          </div>
+        </div>
+      ))}
+    </div>
+  ) : catalogError ? (
+    <div className="flex flex-1 flex-col items-center justify-center gap-2 py-16 text-center text-muted-foreground">
+      <AlertTriangle className="h-10 w-10 opacity-30" />
+      <p className="text-sm font-semibold text-foreground">Catalog load nahi hua</p>
+      <p className="max-w-xs text-xs">
+        Internet aur server dono chahiye. Jab online ho jayein tab products load honge —
+        tab hi billing chalegi (offline bill save nahi hota).
+      </p>
+    </div>
+  ) : (
+    <ProductGrid products={filteredCatalog} onAdd={addProduct} />
+  );
+
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
       <PosTopBar />
 
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        {/* Left: catalog — full width on mobile when cart is slid away */}
-        <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-r border-border/70 p-3 lg:p-3.5">
-          <ProductSearch
-            value={query}
-            onValueChange={setQuery}
-            onScan={scanBarcode}
-            inputRef={searchRef}
-            resultCount={filtered.length}
-          />
-          <div className="mt-2.5">
+        {/* Desktop: products band — sirf Open tab */}
+        {!productsOpen && (
+          <button
+            type="button"
+            onClick={() => setProductsOpen(true)}
+            aria-label="Products kholo"
+            className="hidden lg:flex w-11 shrink-0 flex-col items-center justify-center gap-2 border-r border-border/70 bg-card text-primary transition-colors hover:bg-card-hover"
+          >
+            <ChevronRight className="h-5 w-5" />
+            <span className="text-[11px] font-black uppercase tracking-wide [writing-mode:vertical-rl] rotate-180">
+              Open
+            </span>
+          </button>
+        )}
+
+        {/* Products — mobile full width; desktop sidebar jab open ho */}
+        <section
+          className={cn(
+            "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-r border-border/70 p-3 lg:p-3.5",
+            productsOpen ? "lg:flex-[3] lg:basis-0 lg:max-w-[30%] lg:flex-none" : "lg:hidden",
+          )}
+        >
+          <div className="mb-2.5 hidden items-center justify-between gap-2 lg:flex">
+            <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Products</p>
+            <button
+              type="button"
+              onClick={() => setProductsOpen(false)}
+              className="inline-flex h-8 items-center gap-1 rounded-md border border-border/80 bg-card px-2 text-xs font-bold text-muted-foreground hover:bg-card-hover hover:text-foreground"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Band
+            </button>
+          </div>
+          {(isDesktop ? productsOpen : !cartOpen) && (
+            <div className="mb-2.5">
+              <ProductSearch
+                value={catalogQuery}
+                onValueChange={setCatalogQuery}
+                onScan={scanCatalogBarcode}
+                inputRef={catalogSearchRef}
+                resultCount={filteredCatalog.length}
+                placeholder="Products list filter — naam ya barcode…"
+              />
+            </div>
+          )}
+          <div>
             <CategoryChips
               categories={categories}
               active={category}
               onSelect={setCategory}
             />
           </div>
-          <div className="mt-2.5 flex-1 overflow-y-auto pr-1">
-            {catalogLoading ? (
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(12.5rem,1fr))] gap-1.5">
-                {Array.from({ length: 12 }).map((_, i) => (
-                  <div
-                    key={i}
-                    className="flex animate-pulse items-stretch gap-2 rounded-lg border border-border/80 bg-card p-1.5"
-                  >
-                    <div className="h-[4.25rem] w-[4.25rem] shrink-0 rounded-md bg-muted" />
-                    <div className="flex flex-1 flex-col justify-between py-0.5">
-                      <div className="space-y-2">
-                        <div className="h-4 w-full rounded bg-muted" />
-                        <div className="h-3 w-16 rounded-full bg-muted" />
-                      </div>
-                      <div className="h-4 w-20 rounded bg-muted" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : catalogError ? (
-              <div className="flex flex-1 flex-col items-center justify-center gap-2 py-16 text-center text-muted-foreground">
-                <AlertTriangle className="h-10 w-10 opacity-30" />
-                <p className="text-sm font-semibold text-foreground">Catalog load nahi hua</p>
-                <p className="max-w-xs text-xs">
-                  Internet aur server dono chahiye. Jab online ho jayein tab products load honge —
-                  tab hi billing chalegi (offline bill save nahi hota).
-                </p>
-              </div>
-            ) : (
-              <ProductGrid products={filtered} onAdd={addProduct} />
-            )}
-          </div>
+          <div className="mt-2.5 flex-1 overflow-y-auto pr-1">{catalogBody}</div>
         </section>
 
         {/* Backdrop when cart open on mobile */}
@@ -434,35 +544,51 @@ export function PosRegister() {
           />
         )}
 
-        {/* Right: cart — fixed slide-in on mobile, always visible on lg+ */}
+        {/* Current Sale — search upar (fixed), cart neeche */}
         <div
           className={cn(
-            "fixed inset-y-0 right-0 z-50 flex h-full w-[min(100%,420px)] overflow-hidden border-l border-border/70 bg-background shadow-xl transition-transform duration-300 ease-out lg:relative lg:z-auto lg:w-[500px] lg:translate-x-0 lg:shadow-none xl:w-[560px] 2xl:w-[620px]",
+            "fixed inset-y-0 right-0 z-50 flex h-full w-[min(100%,420px)] min-w-0 flex-col overflow-hidden border-l border-border/70 bg-background shadow-xl transition-[transform,flex] duration-300 ease-out lg:relative lg:z-auto lg:min-w-0 lg:translate-x-0 lg:shadow-none",
+            productsOpen ? "lg:flex-[7] lg:basis-0" : "lg:flex-1",
             cartOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0",
           )}
         >
-          <CartPanel
-            lines={lines}
-            customers={customers}
-            customerId={customerId}
-            onCustomerChange={selectCustomer}
-            discount={discount}
-            onDiscountChange={setDiscount}
-            discountRecipientName={discountRecipientName}
-            onDiscountRecipientNameChange={setDiscountRecipientName}
-            discountReason={discountReason}
-            onDiscountReasonChange={setDiscountReason}
-            payment={payment}
-            onPaymentChange={setPayment}
-            onQty={changeQty}
-            onSetQty={setLineQty}
-            onRemove={removeLine}
-            onClear={resetSale}
-            onHold={holdCart}
-            onCheckout={checkout}
-            heldCarts={heldCarts}
-            onResume={resumeCart}
-          />
+          <div className="shrink-0 border-b border-border/70 p-3 lg:p-3.5 lg:pb-3">
+            {(isDesktop || cartOpen) && (
+              <SaleQuickAdd
+                value={saleQuery}
+                onValueChange={setSaleQuery}
+                onSubmit={submitSaleSearch}
+                results={saleSearchResults}
+                onPick={pickSaleProduct}
+                inputRef={saleSearchRef}
+                disabled={catalogLoading || catalogError}
+              />
+            )}
+          </div>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <CartPanel
+              lines={lines}
+              customers={customers}
+              customerId={customerId}
+              onCustomerChange={selectCustomer}
+              discount={discount}
+              onDiscountChange={setDiscount}
+              discountRecipientName={discountRecipientName}
+              onDiscountRecipientNameChange={setDiscountRecipientName}
+              discountReason={discountReason}
+              onDiscountReasonChange={setDiscountReason}
+              payment={payment}
+              onPaymentChange={setPayment}
+              onQty={changeQty}
+              onSetQty={setLineQty}
+              onRemove={removeLine}
+              onClear={resetSale}
+              onHold={holdCart}
+              onCheckout={checkout}
+              heldCarts={heldCarts}
+              onResume={resumeCart}
+            />
+          </div>
         </div>
 
         <CartSlideHandle

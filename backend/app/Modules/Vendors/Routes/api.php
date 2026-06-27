@@ -19,6 +19,7 @@ Route::middleware(['auth:sanctum', 'role:owner,manager'])->group(function () {
         Route::post('/', [PurchaseController::class, 'store']);
         Route::get('/{purchase}', [PurchaseController::class, 'show']);
         Route::post('/{purchase}/lines', [PurchaseController::class, 'appendLines']);
+        Route::put('/{purchase}/lines', [PurchaseController::class, 'replaceLines']);
         Route::post('/{purchase}/close', [PurchaseController::class, 'close']);
     });
 

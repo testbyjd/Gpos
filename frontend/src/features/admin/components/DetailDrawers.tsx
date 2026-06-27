@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useState, type ReactNode } from "react";
-import { PackagePlus, Printer, RotateCcw, X } from "lucide-react";
+import { PackagePlus, Pencil, Printer, RotateCcw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ModalPortal } from "@/components/ui/modal-portal";
 import { useModalDismiss } from "@/lib/hooks/useModalDismiss";
@@ -684,7 +684,7 @@ export function PurchaseDetailModal({
   const isOpen = grn.receiving_status === "open";
 
   async function handleCloseGrn() {
-    if (!window.confirm(`${grn.grn_no} band karni hai? Band hone ke baad aur items add nahi ho sakte.`)) return;
+    if (!window.confirm(`${grn.grn_no} band karni hai? Band hone ke baad edit ya naye items add nahi ho sakte.`)) return;
     setClosing(true);
     try {
       const res = await closePurchase(grn.id);
@@ -710,6 +710,15 @@ export function PurchaseDetailModal({
                 <p className="mt-1 text-sm text-muted-foreground">{new Date(grn.received_at).toLocaleString("en-PK")}</p>
               </div>
               <div className="flex flex-wrap items-center justify-end gap-2">
+                {isOpen && (
+                  <Link
+                    href={`/purchases/new?edit=${grn.id}`}
+                    className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-semibold text-foreground transition-colors hover:bg-card-hover"
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Edit GRN
+                  </Link>
+                )}
                 {isOpen && (
                   <Link
                     href={`/purchases/new?extend=${grn.id}`}

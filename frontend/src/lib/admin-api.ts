@@ -340,6 +340,16 @@ export function appendPurchaseLines(
   });
 }
 
+export function replacePurchaseLines(
+  purchaseId: number,
+  data: { paid_amount?: number; lines: Array<Record<string, unknown>> },
+) {
+  return apiFetch<{ data: PurchaseRow }>(`/purchases/${purchaseId}/lines`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
 export function closePurchase(purchaseId: number) {
   return apiFetch<{ data: PurchaseRow }>(`/purchases/${purchaseId}/close`, { method: "POST" });
 }

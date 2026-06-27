@@ -174,4 +174,42 @@ class PurchaseServiceTest extends TestCase
             ['product_id' => $product->id, 'qty' => 5, 'unit_cost' => 110],
         ]);
     }
+
+    public function test_open_grn_lines_can_be_replaced_before_close(): void
+    {
+        $vendor = Vendor::create(['name' => 'Wholesale', 'balance' => 0, 'is_active' => true]);
+        $product = Product::create([
+            'name' => 'Oil Tin',
+            'unit' => 'pcs',
+            'avg_cost' => 100,
+            'sell_price' => 130,
+            'stock_qty' => 10,
+            'low_stock_threshold' => 5,
+            'is_active' => true,
+        ]);
+
+        $service = app(PurchaseService::class);
+        $purchase = $service->create([
+            'vendor_id' => $vendor->id,
+            'receiving_open' => true,
+            'paid_amount' => 0,
+            'lines' => [
+                ['product_id' => $product->id, 'qty' => 100, 'unit_cost' => 110],
+            ],
+        ]);
+
+        $updated = $service->replaceLines($purchase, [
+            ['product_id' => $product->id, 'qty' => 80, 'unit_cost' => 115],
+        ], 1000);
+
+        $product->refresh();
+        $vendor->refresh();
+
+        $this->assertSame('open', $updated->receiving_status);
+        $this->assertCount(1, $updated->lines);
+        $this->assertEquals(90.000, (float) $product->stock_qty); // 10 starting + 80 replaced line
+        $this->assertEquals(9200.00, (float) $updated->subtotal);
+        $this->assertEquals(8200.00, (float) $updated->balance_amount);
+        $this->assertEquals(8200.00, (float) $vendor->balance);
+    }
 }

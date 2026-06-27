@@ -103,11 +103,12 @@ function PurchasesPageContent() {
           <PagePanel>
             <PanelHeader title="Purchase register" meta={`${filtered.length} GRNs from backend`} actions={<SearchInput label="Search GRN or vendor" value={search} onChange={(e) => setSearch(e.target.value)} className="w-60" containerClassName="hidden sm:block" />} />
             <DataTable
-              columns={["GRN", "Date", "Vendor", "Items", "Amount", "Balance", "State"]}
-              minWidth="760px"
+              columns={["GRN", "Date", "Vendor", "Lines", "Amount", "Balance", "State"]}
+              minWidth="720px"
               rows={filtered.map((purchase) => {
                 const balance = Number(purchase.balance_amount);
                 const highlight = justPosted && purchase.id === latestId;
+                const lineCount = purchase.lines.length;
                 return [
                   <button
                     key="grn"
@@ -122,7 +123,7 @@ function PurchasesPageContent() {
                   </button>,
                   new Date(purchase.received_at).toLocaleDateString("en-PK"),
                   <span key="vendor" className="font-bold text-foreground">{purchase.vendor?.name ?? "—"}</span>,
-                  purchase.lines.map((l) => l.product?.name).filter(Boolean).join(", ") || `${purchase.lines.length} lines`,
+                  <span key="lines" className="tabular-nums text-muted-foreground">{lineCount}</span>,
                   <span key="amount" className="font-black tabular-nums text-foreground">{formatMoney(Number(purchase.subtotal))}</span>,
                   <span key="balance" className="font-bold tabular-nums text-foreground">{formatMoney(balance)}</span>,
                   <StatusPill key="state" tone={stateTone(purchase)}>{stateLabel(purchase)}</StatusPill>,

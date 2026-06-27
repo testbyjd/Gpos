@@ -101,6 +101,99 @@ class PurchaseService
         return $purchase->fresh(['vendor', 'lines.product']);
     }
 
+    /**
+     * Replace all lines on an open GRN — used while receiving is still open.
+     *
+     * @param  array<int, array<string, mixed>>  $lines
+     */
+    public function replaceLines(Purchase $purchase, array $lines, ?float $paidAmount = null, ?int $userId = null): Purchase
+    {
+        $this->assertReceivingOpen($purchase);
+
+        return DB::transaction(function () use ($purchase, $lines, $paidAmount, $userId) {
+            $purchase = Purchase::lockForUpdate()->findOrFail($purchase->id);
+            $oldBalance = (float) $purchase->balance_amount;
+
+            foreach ($purchase->lines()->orderByDesc('id')->get() as $line) {
+                $this->reverseReceiveLine($purchase, $line, $userId);
+                $line->delete();
+            }
+
+            $lineSubtotal = 0.0;
+            foreach ($lines as $line) {
+                $lineSubtotal += $this->receiveLine($purchase, $line, $purchase->store_id, $userId);
+            }
+
+            $paid = $paidAmount ?? (float) $purchase->paid_amount;
+            if ($paid > $lineSubtotal) {
+                throw ValidationException::withMessages([
+                    'paid_amount' => ['Paid amount GRN total se zyada nahi ho sakta.'],
+                ]);
+            }
+
+            $purchase->subtotal = round($lineSubtotal, 2);
+            $purchase->paid_amount = round($paid, 2);
+            $purchase->balance_amount = max(0, round($lineSubtotal - $paid, 2));
+            $purchase->save();
+
+            $vendor = Vendor::lockForUpdate()->findOrFail($purchase->vendor_id);
+            $newBalance = (float) $purchase->balance_amount;
+            $vendor->balance = bcadd(
+                (string) $vendor->balance,
+                (string) ($newBalance - $oldBalance),
+                2,
+            );
+            $vendor->save();
+
+            return $purchase->load(['vendor', 'lines.product']);
+        });
+    }
+
+    private function assertReceivingOpen(Purchase $purchase): void
+    {
+        if ($purchase->receiving_status !== 'open') {
+            throw ValidationException::withMessages([
+                'purchase' => ['Yeh GRN band hai — ab edit nahi ho sakti.'],
+            ]);
+        }
+    }
+
+    private function reverseReceiveLine(Purchase $purchase, PurchaseLine $line, ?int $userId): void
+    {
+        $product = Product::lockForUpdate()->findOrFail($line->product_id);
+        $qty = (float) $line->qty;
+        $unitCost = (float) $line->unit_cost;
+        $stock = (float) $product->stock_qty;
+
+        if ($stock + 0.0001 < $qty) {
+            throw ValidationException::withMessages([
+                'lines' => ["{$product->name}: stock kam hai — GRN line edit nahi ho sakti (sold/adjusted ho chuka)."],
+            ]);
+        }
+
+        $newStock = round($stock - $qty, 3);
+        if ($newStock <= 0) {
+            $product->avg_cost = 0;
+        } else {
+            $currentAvg = (float) $product->avg_cost;
+            $product->avg_cost = round((($stock * $currentAvg) - ($qty * $unitCost)) / $newStock, 2);
+        }
+        $product->stock_qty = $newStock;
+        $product->save();
+
+        StockMovement::create([
+            'store_id' => $product->store_id,
+            'product_id' => $product->id,
+            'type' => 'grn_edit_reversal',
+            'qty_delta' => -$qty,
+            'qty_after' => $product->stock_qty,
+            'reference_type' => 'purchase',
+            'reference_id' => $purchase->id,
+            'user_id' => $userId,
+            'note' => 'GRN line reversed before edit',
+        ]);
+    }
+
     /** @return float line total added */
     private function receiveLine(Purchase $purchase, array $line, ?int $storeId, ?int $userId): float
     {

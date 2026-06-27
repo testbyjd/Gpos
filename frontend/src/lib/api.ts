@@ -4,6 +4,21 @@ const DEFAULT_API_BASE = "http://localhost:8000/api/v1";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE;
 
+function apiAssetOrigin(): string | undefined {
+  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL;
+  if (!apiBase) return undefined;
+  return apiBase.replace(/\/api\/v\d+\/?$/, "");
+}
+
+/** Turn API `/storage/...` paths into absolute URLs for `<img src>`. */
+export function resolveAssetUrl(path: string | null | undefined): string | undefined {
+  if (!path) return undefined;
+  if (path.startsWith("http://") || path.startsWith("https://")) return path;
+  const origin = apiAssetOrigin() ?? (typeof window !== "undefined" ? window.location.origin : "");
+  if (!origin) return path;
+  return `${origin}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
 export class ApiError extends Error {
   status: number;
 
@@ -105,14 +120,6 @@ export async function apiUpload<T>(path: string, formData: FormData, method = "P
   }
 
   return res.json() as Promise<T>;
-}
-
-/** Turn API `/storage/...` paths into absolute URLs for `<img src>`. */
-export function resolveAssetUrl(path: string | null | undefined): string | undefined {
-  if (!path) return undefined;
-  if (path.startsWith("http://") || path.startsWith("https://")) return path;
-  if (typeof window !== "undefined") return `${window.location.origin}${path}`;
-  return path;
 }
 
 export async function checkApiHealth(): Promise<boolean> {

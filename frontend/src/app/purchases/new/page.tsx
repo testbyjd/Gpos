@@ -32,6 +32,7 @@ import {
   listCategories,
   listProducts,
   listVendors,
+  replacePurchaseLines,
   type CategoryRow,
   type ProductRow,
   type PurchaseRow,
@@ -60,7 +61,8 @@ export default function NewPurchasePage() {
   const [paidInput, setPaidInput] = useState("0");
   const [keepGrnOpen, setKeepGrnOpen] = useState(false);
   const [extendPurchase, setExtendPurchase] = useState<PurchaseRow | null>(null);
-  const [extendLoading, setExtendLoading] = useState(false);
+  const [editPurchase, setEditPurchase] = useState<PurchaseRow | null>(null);
+  const [grnLoading, setGrnLoading] = useState(false);
   const { toast, showToast, hideToast } = useAppToast();
   const [loadError, setLoadError] = useState<string | null>(null);
   const [posting, setPosting] = useState(false);
@@ -74,6 +76,23 @@ export default function NewPurchasePage() {
   const canPost = vendor !== "" && lines.length > 0 && paidAmount <= subtotal;
   const hasDraft = lines.length > 0;
   const isExtend = extendPurchase !== null;
+  const isEdit = editPurchase !== null;
+
+  function purchaseLineToDraft(line: PurchaseRow["lines"][number]): DraftLine {
+    const product = line.product;
+    return {
+      id: crypto.randomUUID(),
+      barcode: product?.barcode ?? "",
+      name: product?.name ?? "Product",
+      category: product?.category ?? "Uncategorized",
+      unit: product?.unit ?? "pcs",
+      qty: Number(line.qty),
+      cost: Number(line.unit_cost),
+      isNew: false,
+      sellPrice: Number(product?.sell_price ?? line.unit_cost),
+      promo: null,
+    };
+  }
 
   useEffect(() => {
     if (!hasDraft) return;
@@ -117,26 +136,35 @@ export default function NewPurchasePage() {
   }, []);
 
   useEffect(() => {
-    const extendId = new URLSearchParams(window.location.search).get("extend");
-    if (!extendId) return;
+    const params = new URLSearchParams(window.location.search);
+    const editId = params.get("edit");
+    const extendId = params.get("extend");
+    const targetId = editId ?? extendId;
+    if (!targetId) return;
 
-    setExtendLoading(true);
-    getPurchase(Number(extendId))
+    setGrnLoading(true);
+    getPurchase(Number(targetId))
       .then((res) => {
         const purchase = res.data;
         if (purchase.receiving_status !== "open") {
-          setLoadError(`${purchase.grn_no} band hai — aur items add nahi ho sakte.`);
+          setLoadError(`${purchase.grn_no} band hai — ab edit ya extend nahi ho sakta.`);
           return;
         }
-        setExtendPurchase(purchase);
+        if (editId) {
+          setEditPurchase(purchase);
+          setLines(purchase.lines.map(purchaseLineToDraft));
+          setPaidInput(String(Number(purchase.paid_amount)));
+        } else {
+          setExtendPurchase(purchase);
+        }
         if (purchase.vendor?.id) {
           setVendor(String(purchase.vendor.id));
         }
       })
       .catch((err) => {
-        setLoadError(getErrorMessage(err, "GRN load nahi hui — extend nahi ho sakta."));
+        setLoadError(getErrorMessage(err, "GRN load nahi hui."));
       })
-      .finally(() => setExtendLoading(false));
+      .finally(() => setGrnLoading(false));
   }, []);
 
   function toPurchaseProduct(product: ProductRow): PurchaseProduct {
@@ -171,6 +199,12 @@ export default function NewPurchasePage() {
     setLines((prev) => prev.filter((l) => l.id !== id));
   }
 
+  function updateLine(id: string, patch: Partial<Pick<DraftLine, "qty" | "cost">>) {
+    setLines((prev) =>
+      prev.map((line) => (line.id === id ? { ...line, ...patch } : line)),
+    );
+  }
+
   async function postPurchase() {
     if (!canPost || posting) return;
     if (!isExtend && !postClientId.current) {
@@ -193,7 +227,13 @@ export default function NewPurchasePage() {
       };
     });
     try {
-      if (isExtend && extendPurchase) {
+      if (isEdit && editPurchase) {
+        await replacePurchaseLines(editPurchase.id, {
+          paid_amount: paidAmount,
+          lines: linePayload,
+        });
+        showToast(`${editPurchase.grn_no} update ho gayi · ${formatMoney(subtotal)}`, "success");
+      } else if (isExtend && extendPurchase) {
         await appendPurchaseLines(extendPurchase.id, {
           paid_amount: paidAmount,
           lines: linePayload,
@@ -227,8 +267,8 @@ export default function NewPurchasePage() {
 
   return (
     <AdminShell
-      title={isExtend ? `Extend ${extendPurchase?.grn_no ?? "GRN"}` : "New Purchase"}
-      eyebrow={isExtend ? "Add more items to same GRN" : "Goods received (GRN)"}
+      title={isEdit ? `Edit ${editPurchase?.grn_no ?? "GRN"}` : isExtend ? `Extend ${extendPurchase?.grn_no ?? "GRN"}` : "New Purchase"}
+      eyebrow={isEdit ? "Open GRN — lines edit before close" : isExtend ? "Add more items to same GRN" : "Goods received (GRN)"}
       actions={
         <Link
           href="/purchases"
@@ -241,8 +281,14 @@ export default function NewPurchasePage() {
       }
     >
       {loadError && <PageAlert message={loadError} tone="error" />}
-      {extendLoading && (
+      {grnLoading && (
         <PageAlert message="GRN load ho rahi hai…" tone="info" />
+      )}
+      {isEdit && editPurchase && !loadError && (
+        <PageAlert
+          message={`${editPurchase.grn_no} — qty/cost change karo, items hatao ya naye scan karo. Save pe poori GRN update hogi (sirf Close se pehle).`}
+          tone="info"
+        />
       )}
       {isExtend && extendPurchase && !loadError && (
         <PageAlert
@@ -252,7 +298,7 @@ export default function NewPurchasePage() {
       )}
       {hasDraft && !loadError && (
         <PageAlert
-          message={isExtend ? "Naye items list mein hain — Add to GRN dabao." : "Draft list mein hai — stock tab tak update nahi hoga jab tak Post purchase na dabao."}
+          message={isEdit ? "Lines edit ho rahi hain — Save GRN dabao." : isExtend ? "Naye items list mein hain — Add to GRN dabao." : "Draft list mein hai — stock tab tak update nahi hoga jab tak Post purchase na dabao."}
           tone="info"
         />
       )}
@@ -268,7 +314,7 @@ export default function NewPurchasePage() {
                 </span>
                 <select
                   value={vendor}
-                  disabled={isExtend}
+                  disabled={isExtend || isEdit}
                   onChange={(e) => {
                     setVendor(e.target.value);
                     setTimeout(() => barcodeRef.current?.focus(), 0);
@@ -359,8 +405,34 @@ export default function NewPurchasePage() {
                             {l.newAvg !== undefined && ` · new avg ${formatMoney(l.newAvg)}`}
                           </p>
                         </td>
-                        <td className="px-4 py-3 tabular-nums text-foreground">{l.qty} {l.unit}</td>
-                        <td className="px-4 py-3 tabular-nums text-muted-foreground">{formatMoney(l.cost)}</td>
+                        <td className="px-4 py-3 tabular-nums text-foreground">
+                          {isEdit ? (
+                            <input
+                              type="number"
+                              min={0.001}
+                              step={l.unit === "kg" || l.unit === "L" ? 0.001 : 1}
+                              value={l.qty}
+                              onChange={(e) => updateLine(l.id, { qty: Number(e.target.value) || 0 })}
+                              className="h-9 w-24 rounded-md border border-border bg-input px-2 text-sm font-semibold"
+                            />
+                          ) : (
+                            <>{l.qty} {l.unit}</>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 tabular-nums text-muted-foreground">
+                          {isEdit ? (
+                            <input
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              value={l.cost}
+                              onChange={(e) => updateLine(l.id, { cost: Number(e.target.value) || 0 })}
+                              className="h-9 w-28 rounded-md border border-border bg-input px-2 text-sm font-semibold"
+                            />
+                          ) : (
+                            formatMoney(l.cost)
+                          )}
+                        </td>
                         <td className="px-4 py-3 font-black tabular-nums text-foreground">{formatMoney(l.qty * l.cost)}</td>
                         <td className="px-4 py-3 text-right">
                           <button
@@ -431,11 +503,13 @@ export default function NewPurchasePage() {
               />
             </label>
             <p className="mt-2 text-xs text-muted-foreground">
-              {isExtend
+              {isEdit
+                ? "GRN ka total paid amount — save pe vendor balance update hoga."
+                : isExtend
                 ? "Is batch ka jo abhi pay kiya us ki amount likho — GRN total update hoga."
                 : "Jitna abhi diya us ki amount likho — baqi vendor balance (udhar) mein jayega."}
             </p>
-            {!isExtend && (
+            {!isExtend && !isEdit && (
               <label className="mt-3 flex cursor-pointer items-start gap-2 rounded-md border border-border/80 bg-muted/40 p-3">
                 <input
                   type="checkbox"
@@ -448,9 +522,9 @@ export default function NewPurchasePage() {
                 </span>
               </label>
             )}
-            <Button size="lg" className="mt-4 w-full" disabled={!canPost || posting || extendLoading} onClick={postPurchase}>
+            <Button size="lg" className="mt-4 w-full" disabled={!canPost || posting || grnLoading} onClick={postPurchase}>
               <PackagePlus className="h-5 w-5" />
-              {posting ? "Saving…" : isExtend ? "Add to GRN" : "Post purchase"}
+              {posting ? "Saving…" : isEdit ? "Save GRN" : isExtend ? "Add to GRN" : "Post purchase"}
             </Button>
             {!canPost && (
               <p className="mt-2 text-center text-[11px] text-muted-foreground">

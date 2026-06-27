@@ -80,6 +80,23 @@ class PurchaseController extends Controller
         return response()->json(['data' => $purchase]);
     }
 
+    public function replaceLines(Request $request, Purchase $purchase, PurchaseService $service): JsonResponse
+    {
+        $data = $request->validate([
+            'paid_amount' => ['nullable', 'numeric', 'min:0'],
+            ...self::LINE_RULES,
+        ]);
+
+        $purchase = $service->replaceLines(
+            $purchase,
+            $data['lines'],
+            array_key_exists('paid_amount', $data) ? (float) $data['paid_amount'] : null,
+            $request->user()?->id,
+        );
+
+        return response()->json(['data' => $purchase]);
+    }
+
     public function close(Purchase $purchase, PurchaseService $service): JsonResponse
     {
         return response()->json(['data' => $service->close($purchase)]);
