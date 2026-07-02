@@ -212,4 +212,46 @@ class PurchaseServiceTest extends TestCase
         $this->assertEquals(8200.00, (float) $updated->balance_amount);
         $this->assertEquals(8200.00, (float) $vendor->balance);
     }
+
+    public function test_second_grn_with_same_barcode_updates_existing_product(): void
+    {
+        $vendorA = Vendor::create(['name' => 'Vendor A', 'balance' => 0, 'is_active' => true]);
+        $vendorB = Vendor::create(['name' => 'Vendor B', 'balance' => 0, 'is_active' => true]);
+
+        $service = app(PurchaseService::class);
+        $service->create([
+            'vendor_id' => $vendorA->id,
+            'lines' => [
+                [
+                    'barcode' => '8961014258348',
+                    'name' => 'Lux Soap ( VG jasmine 123 g )',
+                    'unit' => 'pcs',
+                    'qty' => 72,
+                    'unit_cost' => 140,
+                    'sell_price' => 150,
+                ],
+            ],
+        ]);
+
+        $service->create([
+            'vendor_id' => $vendorB->id,
+            'lines' => [
+                [
+                    'barcode' => '8961014258348',
+                    'name' => 'Lux Soap ( VG jasmine 123 g )',
+                    'unit' => 'pcs',
+                    'qty' => 12,
+                    'unit_cost' => 160,
+                    'sell_price' => 160,
+                ],
+            ],
+        ]);
+
+        $this->assertEquals(1, Product::whereRaw('LOWER(TRIM(barcode)) = ?', ['8961014258348'])->count());
+
+        $product = Product::whereRaw('LOWER(TRIM(barcode)) = ?', ['8961014258348'])->firstOrFail();
+        $this->assertEquals(84.000, (float) $product->stock_qty);
+        // (72*140 + 12*160) / 84 = 142.86
+        $this->assertEquals(142.86, (float) $product->avg_cost);
+    }
 }

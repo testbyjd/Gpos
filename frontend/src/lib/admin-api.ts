@@ -52,6 +52,7 @@ export interface ListProductsParams {
   page?: number;
   perPage?: number;
   q?: string;
+  barcode?: string;
   categoryId?: number;
   lowStock?: boolean;
   stockOk?: boolean;
@@ -75,6 +76,7 @@ export function listProducts(params: ListProductsParams = {}) {
   q.set("per_page", String(params.perPage ?? 100));
   if (params.page) q.set("page", String(params.page));
   if (params.q?.trim()) q.set("q", params.q.trim());
+  if (params.barcode?.trim()) q.set("barcode", params.barcode.trim());
   if (params.categoryId) q.set("category_id", String(params.categoryId));
   if (params.lowStock) q.set("low_stock", "1");
   if (params.stockOk) q.set("stock_ok", "1");
@@ -100,6 +102,19 @@ export async function listAllProducts(perPage = 200): Promise<ProductRow[]> {
 /** Purchase/POS pickers — saari active products (paginated fetch). */
 export async function listProductsBulk() {
   return { data: await listAllProducts() };
+}
+
+export async function findProductByBarcode(barcode: string): Promise<ProductRow | null> {
+  const trimmed = barcode.trim();
+  if (!trimmed) return null;
+  const res = await listProducts({ barcode: trimmed, perPage: 1, page: 1 });
+  return res.data[0] ?? null;
+}
+
+export function barcodesMatch(a: string | null | undefined, b: string | null | undefined): boolean {
+  const left = (a ?? "").trim().toLowerCase();
+  const right = (b ?? "").trim().toLowerCase();
+  return left !== "" && left === right;
 }
 
 export interface CategoryRow {

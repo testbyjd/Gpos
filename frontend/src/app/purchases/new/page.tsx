@@ -28,6 +28,8 @@ import {
 import { apiFetch, getErrorMessage } from "@/lib/api";
 import {
   appendPurchaseLines,
+  barcodesMatch,
+  findProductByBarcode,
   getPurchase,
   listCategories,
   listProductsBulk,
@@ -82,6 +84,7 @@ export default function NewPurchasePage() {
     const product = line.product;
     return {
       id: crypto.randomUUID(),
+      productId: product?.id,
       barcode: product?.barcode ?? "",
       name: product?.name ?? "Product",
       category: product?.category ?? "Uncategorized",
@@ -169,6 +172,7 @@ export default function NewPurchasePage() {
 
   function toPurchaseProduct(product: ProductRow): PurchaseProduct {
     return {
+      id: product.id,
       barcode: product.barcode ?? "",
       name: product.name,
       category: product.category ?? "Uncategorized",
@@ -180,11 +184,32 @@ export default function NewPurchasePage() {
     };
   }
 
-  function handleScan(code: string) {
+  function findCachedProduct(barcode: string): ProductRow | undefined {
+    return products.find((product) => barcodesMatch(product.barcode, barcode));
+  }
+
+  async function handleScan(code: string) {
     const trimmed = code.trim();
     if (!vendor || !trimmed) return;
-    const existing = products.find((product) => product.barcode === trimmed);
-    setScan({ barcode: trimmed, existing: existing ? toPurchaseProduct(existing) : undefined });
+
+    let existingRow = findCachedProduct(trimmed);
+    if (!existingRow) {
+      try {
+        existingRow = (await findProductByBarcode(trimmed)) ?? undefined;
+        if (existingRow) {
+          setProducts((prev) =>
+            prev.some((p) => p.id === existingRow!.id) ? prev : [...prev, existingRow!],
+          );
+        }
+      } catch {
+        /* fallback to new product flow */
+      }
+    }
+
+    setScan({
+      barcode: trimmed,
+      existing: existingRow ? toPurchaseProduct(existingRow) : undefined,
+    });
     setBarcode("");
   }
 
@@ -212,12 +237,12 @@ export default function NewPurchasePage() {
     }
     setPosting(true);
     const linePayload = lines.map((line) => {
-      const existing = products.find((product) => product.barcode && product.barcode === line.barcode);
+      const cached = line.barcode ? findCachedProduct(line.barcode) : undefined;
       return {
-        product_id: existing?.id,
-        barcode: line.barcode || undefined,
+        product_id: line.productId ?? cached?.id,
+        barcode: line.barcode.trim() || undefined,
         name: line.name,
-        category_id: existing ? undefined : line.category_id ?? null,
+        category_id: line.productId || cached ? undefined : line.category_id ?? null,
         unit: line.unit,
         qty: line.qty,
         unit_cost: line.cost,
@@ -353,6 +378,7 @@ export default function NewPurchasePage() {
             <div className="mt-3 flex items-center justify-between gap-3 border-t border-border/70 pt-3">
               <p className="text-xs text-muted-foreground">
                 Scan a packaged item, or add loose / unbarcoded goods manually.
+                Manual add bina barcode ke hamesha naya product banata hai — packaged items scan karo.
               </p>
               <Button
                 variant="secondary"

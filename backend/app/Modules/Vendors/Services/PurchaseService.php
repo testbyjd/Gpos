@@ -4,6 +4,7 @@ namespace App\Modules\Vendors\Services;
 
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Support\ProductBarcode;
 use App\Modules\Vendors\Models\Purchase;
 use App\Modules\Vendors\Models\PurchaseLine;
 use App\Modules\Vendors\Models\Vendor;
@@ -197,29 +198,8 @@ class PurchaseService
     /** @return float line total added */
     private function receiveLine(Purchase $purchase, array $line, ?int $storeId, ?int $userId): float
     {
-        $product = ! empty($line['product_id'])
-            ? Product::lockForUpdate()->findOrFail($line['product_id'])
-            : Product::query()
-                ->when(! empty($line['barcode']), fn ($query) => $query->where('barcode', $line['barcode']))
-                ->lockForUpdate()
-                ->first();
-
-        if (! $product) {
-            $product = Product::create([
-                'store_id' => $storeId,
-                'category_id' => $line['category_id'] ?? null,
-                'barcode' => $line['barcode'] ?? null,
-                'name' => $line['name'],
-                'unit' => $line['unit'] ?? 'pcs',
-                'avg_cost' => 0,
-                'sell_price' => (float) ($line['sell_price'] ?? $line['unit_cost']),
-                'stock_qty' => 0,
-                'low_stock_threshold' => 5,
-                'expiry_date' => $line['expiry_date'] ?? null,
-                'is_active' => true,
-            ]);
-            $product->refresh();
-        }
+        $line['barcode'] = ProductBarcode::normalize($line['barcode'] ?? null);
+        $product = $this->resolveProductForReceive($line, $storeId);
 
         $oldQty = (float) $product->stock_qty;
         $oldAvg = (float) $product->avg_cost;
@@ -259,6 +239,70 @@ class PurchaseService
         ]);
 
         return $qty * $unitCost;
+    }
+
+    private function resolveProductForReceive(array $line, ?int $storeId): Product
+    {
+        $barcode = $line['barcode'] ?? null;
+
+        if (! empty($line['product_id'])) {
+            $product = Product::lockForUpdate()->findOrFail($line['product_id']);
+            if ($barcode && ! $product->barcode) {
+                $this->assertBarcodeAvailable($barcode, $product->id);
+                $product->barcode = $barcode;
+                $product->save();
+            }
+
+            return $product;
+        }
+
+        if ($barcode) {
+            $existing = ProductBarcode::applyMatch(Product::query()->lockForUpdate(), $barcode)->first();
+            if ($existing) {
+                return $existing;
+            }
+        }
+
+        if (empty($line['name'])) {
+            throw ValidationException::withMessages([
+                'lines' => ['Product name ya barcode required hai.'],
+            ]);
+        }
+
+        if ($barcode) {
+            $this->assertBarcodeAvailable($barcode);
+        }
+
+        $product = Product::create([
+            'store_id' => $storeId,
+            'category_id' => $line['category_id'] ?? null,
+            'barcode' => $barcode,
+            'name' => $line['name'],
+            'unit' => $line['unit'] ?? 'pcs',
+            'avg_cost' => 0,
+            'sell_price' => (float) ($line['sell_price'] ?? $line['unit_cost']),
+            'stock_qty' => 0,
+            'low_stock_threshold' => 5,
+            'expiry_date' => $line['expiry_date'] ?? null,
+            'is_active' => true,
+        ]);
+        $product->refresh();
+
+        return $product;
+    }
+
+    private function assertBarcodeAvailable(string $barcode, ?int $ignoreProductId = null): void
+    {
+        $query = ProductBarcode::applyMatch(Product::query(), $barcode);
+        if ($ignoreProductId) {
+            $query->where('id', '!=', $ignoreProductId);
+        }
+
+        if ($query->exists()) {
+            throw ValidationException::withMessages([
+                'barcode' => ["Barcode {$barcode} pehle se kisi product par hai — duplicate inventory nahi ban sakti."],
+            ]);
+        }
     }
 
     private function logVendorPayment(

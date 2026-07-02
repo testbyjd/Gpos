@@ -11,6 +11,7 @@ import { UNITS, newAverageCost, type PurchaseProduct } from "../data/purchasing"
 
 export interface DraftLine {
   id: string;
+  productId?: number;
   barcode: string;
   name: string;
   category: string;
@@ -115,6 +116,7 @@ export function ReceiveItemModal({ barcode, existing, categories, onAdd, onClose
     if (!valid) return;
     const picked = localCategories.find((c) => String(c.id) === categoryId);
     onAdd({
+      productId: existing?.id,
       barcode,
       name: resolvedName,
       category: existing ? existing.category : picked?.name ?? "Uncategorized",
@@ -191,6 +193,12 @@ export function ReceiveItemModal({ barcode, existing, categories, onAdd, onClose
                 <p className="mt-1 font-black tabular-nums text-foreground">{existing.stock} {existing.unit}</p>
               </div>
             </div>
+          )}
+
+          {isNew && !barcode && (
+            <p className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
+              Bina barcode ke naya product banega. Agar yeh item pehle se catalog mein hai to scan karo — warna duplicate inventory ho sakti hai.
+            </p>
           )}
 
           {/* New product fields */}

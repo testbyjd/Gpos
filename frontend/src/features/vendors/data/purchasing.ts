@@ -3,6 +3,7 @@ import type { UnitType } from "@/features/pos/types";
 export const UNITS: UnitType[] = ["pcs", "kg", "g", "dozen", "litre", "pack"];
 
 export interface PurchaseProduct {
+  id?: number;
   barcode: string;
   name: string;
   category: string;

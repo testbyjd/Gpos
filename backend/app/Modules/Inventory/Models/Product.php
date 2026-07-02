@@ -4,6 +4,7 @@ namespace App\Modules\Inventory\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Modules\Inventory\Support\ProductBarcode;
 
 class Product extends Model
 {
@@ -12,6 +13,19 @@ class Product extends Model
         'unit', 'unit_precision', 'avg_cost', 'sell_price', 'stock_qty',
         'low_stock_threshold', 'expiry_date', 'is_active',
     ];
+
+    protected static function booted(): void
+    {
+        static::saving(function (Product $product) {
+            if ($product->isDirty('barcode')) {
+                $product->barcode = ProductBarcode::normalize($product->barcode);
+            }
+            if ($product->isDirty('sku')) {
+                $sku = trim((string) ($product->sku ?? ''));
+                $product->sku = $sku !== '' ? $sku : null;
+            }
+        });
+    }
 
     protected $appends = ['image_url'];
 

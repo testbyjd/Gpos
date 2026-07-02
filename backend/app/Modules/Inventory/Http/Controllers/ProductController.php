@@ -4,10 +4,12 @@ namespace App\Modules\Inventory\Http\Controllers;
 
 use App\Modules\Inventory\Http\Resources\ProductResource;
 use App\Modules\Inventory\Models\Product;
+use App\Modules\Inventory\Support\ProductBarcode;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class ProductController extends Controller
 {
@@ -25,7 +27,9 @@ class ProductController extends Controller
                         ->orWhere('sku', 'ilike', "%{$q}%");
                 });
             })
-            ->when($request->query('barcode'), fn ($builder, $barcode) => $builder->where('barcode', $barcode))
+            ->when($request->query('barcode'), function ($builder, $barcode) {
+                ProductBarcode::applyMatch($builder, $barcode);
+            })
             ->when($request->query('category_id'), fn ($builder, $categoryId) => $builder->where('category_id', $categoryId))
             ->when($request->boolean('low_stock'), fn ($builder) => $builder->whereColumn('stock_qty', '<=', 'low_stock_threshold'))
             ->when($request->boolean('stock_ok'), fn ($builder) => $builder->whereColumn('stock_qty', '>', 'low_stock_threshold'))
@@ -76,7 +80,7 @@ class ProductController extends Controller
 
     public function update(Request $request, Product $product): JsonResponse
     {
-        $product->update($this->validated($request, partial: true));
+        $product->update($this->validated($request, partial: true, product: $product));
 
         return response()->json(['data' => new ProductResource($product->load('category'))]);
     }
@@ -131,7 +135,7 @@ class ProductController extends Controller
         return response()->json(['data' => new ProductResource($product->load('category'))]);
     }
 
-    private function validated(Request $request, bool $partial = false): array
+    private function validated(Request $request, bool $partial = false, ?Product $product = null): array
     {
         $required = $partial ? 'sometimes' : 'required';
 
@@ -153,7 +157,17 @@ class ProductController extends Controller
         ]);
 
         if (array_key_exists('barcode', $data)) {
-            $data['barcode'] = trim((string) $data['barcode']) ?: null;
+            $data['barcode'] = ProductBarcode::normalize($data['barcode']);
+            if ($data['barcode']) {
+                $duplicate = ProductBarcode::applyMatch(Product::query(), $data['barcode'])
+                    ->when($product, fn ($query) => $query->where('id', '!=', $product->id))
+                    ->exists();
+                if ($duplicate) {
+                    throw ValidationException::withMessages([
+                        'barcode' => ['Yeh barcode pehle se kisi product par hai.'],
+                    ]);
+                }
+            }
         }
         if (array_key_exists('sku', $data)) {
             $data['sku'] = trim((string) ($data['sku'] ?? '')) ?: null;
