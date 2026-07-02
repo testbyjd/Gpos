@@ -15,28 +15,50 @@ class ProductController extends Controller
     {
         $q = trim((string) $request->query('q', ''));
 
-        $products = Product::query()
+        $query = Product::query()
             ->with('category')
-            ->when($request->query('active', '1') !== 'all', fn ($query) => $query->where('is_active', true))
-            ->when($q !== '', function ($query) use ($q) {
-                $query->where(function ($inner) use ($q) {
+            ->when($request->query('active', '1') !== 'all', fn ($builder) => $builder->where('is_active', true))
+            ->when($q !== '', function ($builder) use ($q) {
+                $builder->where(function ($inner) use ($q) {
                     $inner->where('name', 'ilike', "%{$q}%")
                         ->orWhere('barcode', 'ilike', "%{$q}%")
                         ->orWhere('sku', 'ilike', "%{$q}%");
                 });
             })
-            ->when($request->query('barcode'), fn ($query, $barcode) => $query->where('barcode', $barcode))
-            ->when($request->query('category_id'), fn ($query, $categoryId) => $query->where('category_id', $categoryId))
-            ->orderBy('name')
-            ->paginate((int) $request->query('per_page', 100));
+            ->when($request->query('barcode'), fn ($builder, $barcode) => $builder->where('barcode', $barcode))
+            ->when($request->query('category_id'), fn ($builder, $categoryId) => $builder->where('category_id', $categoryId))
+            ->when($request->boolean('low_stock'), fn ($builder) => $builder->whereColumn('stock_qty', '<=', 'low_stock_threshold'))
+            ->when($request->boolean('stock_ok'), fn ($builder) => $builder->whereColumn('stock_qty', '>', 'low_stock_threshold'))
+            ->when($request->filled('expiring_within'), function ($builder) use ($request) {
+                $days = max(1, (int) $request->query('expiring_within', 30));
+                $builder->whereNotNull('expiry_date')
+                    ->where('expiry_date', '<=', now()->addDays($days)->endOfDay());
+            })
+            ->orderBy('name');
+
+        $perPage = min(200, max(1, (int) $request->query('per_page', 100)));
+        $products = (clone $query)->paginate($perPage);
+
+        $active = Product::query()->where('is_active', true);
+        $summary = [
+            'total' => (clone $active)->count(),
+            'low_stock' => (clone $active)->whereColumn('stock_qty', '<=', 'low_stock_threshold')->count(),
+            'expiring_soon' => (clone $active)
+                ->whereNotNull('expiry_date')
+                ->where('expiry_date', '<=', now()->addDays(30)->endOfDay())
+                ->count(),
+            'inventory_value' => (float) ((clone $active)->selectRaw('COALESCE(SUM(stock_qty * avg_cost), 0) as v')->value('v') ?? 0),
+        ];
 
         return response()->json([
             'data' => ProductResource::collection($products->items()),
             'meta' => [
                 'current_page' => $products->currentPage(),
                 'last_page' => $products->lastPage(),
+                'per_page' => $products->perPage(),
                 'total' => $products->total(),
             ],
+            'summary' => $summary,
         ]);
     }
 

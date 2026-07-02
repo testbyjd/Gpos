@@ -8,6 +8,8 @@ export interface ProductRow {
   barcode: string | null;
   name: string;
   unit: string;
+  unit_precision?: number;
+  fractional?: boolean;
   avg_cost: number;
   sell_price: number;
   stock_qty: number;
@@ -46,8 +48,58 @@ export interface PurchaseRow {
   lines: Array<{ id: number; product?: ProductRow; qty: string | number; unit_cost: string | number }>;
 }
 
-export function listProducts() {
-  return apiFetch<{ data: ProductRow[] }>("/inventory/products?per_page=500");
+export interface ListProductsParams {
+  page?: number;
+  perPage?: number;
+  q?: string;
+  categoryId?: number;
+  lowStock?: boolean;
+  stockOk?: boolean;
+  expiringWithin?: number;
+  withSummary?: boolean;
+}
+
+export interface ProductsListResponse {
+  data: ProductRow[];
+  meta: { current_page: number; last_page: number; per_page: number; total: number };
+  summary?: {
+    total: number;
+    low_stock: number;
+    expiring_soon: number;
+    inventory_value: number;
+  };
+}
+
+export function listProducts(params: ListProductsParams = {}) {
+  const q = new URLSearchParams();
+  q.set("per_page", String(params.perPage ?? 100));
+  if (params.page) q.set("page", String(params.page));
+  if (params.q?.trim()) q.set("q", params.q.trim());
+  if (params.categoryId) q.set("category_id", String(params.categoryId));
+  if (params.lowStock) q.set("low_stock", "1");
+  if (params.stockOk) q.set("stock_ok", "1");
+  if (params.expiringWithin) q.set("expiring_within", String(params.expiringWithin));
+  if (params.withSummary) q.set("with_summary", "1");
+  const qs = q.toString();
+  return apiFetch<ProductsListResponse>(`/inventory/products${qs ? `?${qs}` : ""}`);
+}
+
+export async function listAllProducts(perPage = 200): Promise<ProductRow[]> {
+  const first = await listProducts({ page: 1, perPage });
+  if (first.meta.last_page <= 1) return first.data;
+
+  const rest = await Promise.all(
+    Array.from({ length: first.meta.last_page - 1 }, (_, i) =>
+      listProducts({ page: i + 2, perPage }),
+    ),
+  );
+
+  return [...first.data, ...rest.flatMap((r) => r.data)];
+}
+
+/** Purchase/POS pickers — saari active products (paginated fetch). */
+export async function listProductsBulk() {
+  return { data: await listAllProducts() };
 }
 
 export interface CategoryRow {

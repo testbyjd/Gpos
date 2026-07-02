@@ -30,7 +30,7 @@ import {
   appendPurchaseLines,
   getPurchase,
   listCategories,
-  listProducts,
+  listProductsBulk,
   listVendors,
   replacePurchaseLines,
   type CategoryRow,
@@ -116,7 +116,7 @@ export default function NewPurchasePage() {
 
   useEffect(() => {
     let alive = true;
-    Promise.all([listVendors(), listProducts(), listCategories()])
+    Promise.all([listVendors(), listProductsBulk(), listCategories()])
       .then(([vendorRes, productRes, categoryRes]) => {
         if (!alive) return;
         setVendors(vendorRes.data);
