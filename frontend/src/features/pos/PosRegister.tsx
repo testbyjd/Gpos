@@ -15,7 +15,12 @@ import { CartPanel } from "./components/CartPanel";
 import { PaymentModal } from "./components/PaymentModal";
 import { SaleSuccessModal, type SaleResult } from "./components/SaleSuccessModal";
 import { fetchCatalog } from "./api/catalog";
-import { healProductBarcode, resolveScannedBarcode } from "./api/barcode";
+import {
+  healProductBarcode,
+  normalizeBarcode,
+  productMatchesBarcode,
+  resolveScannedBarcode,
+} from "./api/barcode";
 import { fetchPosCustomers } from "./api/customers";
 import { submitSale } from "./api/sale";
 import { validateDiscountApproval } from "./discount";
@@ -24,7 +29,7 @@ import { recordSync } from "@/lib/sync-status";
 import { getErrorMessage } from "@/lib/api";
 import type { CartLine, HeldCart, PaymentMethod, Product, PosCustomer } from "./types";
 
-const CATALOG_CACHE_KEY = "gpos.pos.catalog.v1";
+const CATALOG_CACHE_KEY = "gpos.pos.catalog.v2";
 const HELD_CARTS_KEY = "gpos.pos.heldCarts.v1";
 const PRODUCTS_PANEL_KEY = "gpos.pos.productsPanelOpen.v1";
 
@@ -40,10 +45,7 @@ function readProductsPanelOpen(): boolean {
 function productMatchesQuery(p: Product, raw: string) {
   const q = raw.trim().toLowerCase();
   if (!q) return true;
-  return (
-    p.name.toLowerCase().includes(q) ||
-    (p.barcode?.toLowerCase().includes(q) ?? false)
-  );
+  return p.name.toLowerCase().includes(q) || productMatchesBarcode(p, q);
 }
 
 interface CatalogCache {
@@ -80,6 +82,7 @@ export function PosRegister() {
   const catalogSearchRef = useRef<HTMLInputElement>(null);
   // Stable id for the current checkout so a retry can't create a duplicate sale.
   const saleClientId = useRef<string | null>(null);
+  const autoScanHandled = useRef<string>("");
 
   const subtotal = lines.reduce((s, l) => s + l.product.price * l.qty, 0);
   const total = Math.max(0, subtotal - discount);
@@ -96,6 +99,13 @@ export function PosRegister() {
   const saleSearchResults = useMemo(() => {
     const q = saleQuery.trim();
     if (!q) return [];
+    const resolved = resolveScannedBarcode(products, q);
+    if (resolved.status === "exact" || resolved.status === "legacy") {
+      return [resolved.product];
+    }
+    if (resolved.status === "ambiguous") {
+      return resolved.products.slice(0, 20);
+    }
     return products.filter((p) => productMatchesQuery(p, q)).slice(0, 20);
   }, [saleQuery, products]);
 
@@ -112,7 +122,21 @@ export function PosRegister() {
   }
 
   function pickSaleProduct(p: Product) {
+    const scanned = saleQuery.trim();
+    if (scanned && normalizeBarcode(p.barcode ?? "") !== normalizeBarcode(scanned)) {
+      const resolved = resolveScannedBarcode(products, scanned);
+      if (resolved.status === "legacy" && resolved.product.id === p.id) {
+        void applyLegacyBarcodeHeal(p, resolved.fullBarcode, resolved.oldBarcode).then((healed) => {
+          addProduct(healed);
+        });
+        autoScanHandled.current = scanned;
+        setSaleQuery("");
+        saleSearchRef.current?.focus();
+        return;
+      }
+    }
     addProduct(p);
+    autoScanHandled.current = scanned;
     setSaleQuery("");
     saleSearchRef.current?.focus();
   }
@@ -425,6 +449,27 @@ export function PosRegister() {
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lines, discount, customer, heldCarts, payOpen, saleResult, isDesktop]);
+
+  useEffect(() => {
+    const q = saleQuery.trim();
+    if (!q) {
+      autoScanHandled.current = "";
+      return;
+    }
+    // Scanner often leaves digits without Enter — auto-add when barcode resolves.
+    if (!/^\d{10,}$/.test(q)) return;
+    if (catalogLoading || catalogError) return;
+    if (autoScanHandled.current === q) return;
+    const resolved = resolveScannedBarcode(products, q);
+    if (resolved.status !== "exact" && resolved.status !== "legacy") return;
+    const timer = window.setTimeout(() => {
+      if (autoScanHandled.current === q) return;
+      autoScanHandled.current = q;
+      void submitSaleSearch(q);
+    }, 150);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saleQuery, products, catalogLoading, catalogError]);
 
   useEffect(() => {
     try {

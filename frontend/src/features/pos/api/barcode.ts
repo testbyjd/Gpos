@@ -17,23 +17,38 @@ export function findExactBarcode(products: Product[], code: string): Product | u
   return products.find((p) => normalizeBarcode(p.barcode ?? "") === c);
 }
 
+/** Stored barcode that matches full scan after stripping first 3 digits. */
+export function legacyTruncatedFromScan(scanned: string): string | null {
+  const full = normalizeBarcode(scanned);
+  if (full.length <= LEGACY_BARCODE_PREFIX_SKIP + MIN_TRUNCATED_LEN - 1) {
+    return null;
+  }
+  const truncated = full.slice(LEGACY_BARCODE_PREFIX_SKIP);
+  return truncated.length >= MIN_TRUNCATED_LEN ? truncated : null;
+}
+
 /**
  * Match products stored with the old scanner rule (first 3 digits missing).
  * scanned "8961014258348" ↔ stored "1014258348"
  */
 export function findLegacySkippedBarcodeMatches(products: Product[], scanned: string): Product[] {
-  const full = normalizeBarcode(scanned);
-  if (full.length <= LEGACY_BARCODE_PREFIX_SKIP + MIN_TRUNCATED_LEN - 1) {
-    return [];
-  }
-
-  const truncated = full.slice(LEGACY_BARCODE_PREFIX_SKIP);
-  if (truncated.length < MIN_TRUNCATED_LEN) return [];
+  const truncated = legacyTruncatedFromScan(scanned);
+  if (!truncated) return [];
 
   return products.filter((p) => {
     const stored = normalizeBarcode(p.barcode ?? "");
     return stored !== "" && stored === truncated;
   });
+}
+
+/** True when product barcode matches query exactly or via skip-3 legacy rule. */
+export function productMatchesBarcode(p: Product, raw: string): boolean {
+  const q = normalizeBarcode(raw);
+  const stored = normalizeBarcode(p.barcode ?? "");
+  if (!q || !stored) return false;
+  if (stored === q || stored.includes(q) || q.includes(stored)) return true;
+  const truncated = legacyTruncatedFromScan(q);
+  return truncated !== null && stored === truncated;
 }
 
 export type BarcodeResolveResult =
