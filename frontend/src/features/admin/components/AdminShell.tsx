@@ -11,6 +11,7 @@ import {
   PackagePlus,
   Receipt,
   ReceiptText,
+  ScanSearch,
   Settings,
   ShoppingCart,
   Store,
@@ -43,6 +44,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/settings", label: "Settings", icon: Settings, roles: ["owner"] },
   { href: "/receipt", label: "Receipt", icon: Receipt, roles: ["owner"] },
+  { href: "/possible-barcode", label: "Possible barcode", icon: ScanSearch, roles: ["owner", "manager"] },
 ];
 
 interface AdminShellProps {
