@@ -28,9 +28,9 @@ import {
 import { apiFetch, getErrorMessage } from "@/lib/api";
 import {
   appendPurchaseLines,
-  barcodesMatch,
   findProductByBarcode,
   getPurchase,
+  healProductBarcode,
   listCategories,
   listProductsBulk,
   listVendors,
@@ -45,6 +45,10 @@ import {
   clampPaidAmount,
   inferPurchasePaymentTerms,
 } from "@/features/vendors/data/payment-terms";
+import {
+  legacyTruncatedFromScan,
+  resolveScannedBarcodeRow,
+} from "@/lib/barcode";
 
 type ScanTarget = { barcode: string; existing?: PurchaseProduct };
 
@@ -185,25 +189,84 @@ export default function NewPurchasePage() {
   }
 
   function findCachedProduct(barcode: string): ProductRow | undefined {
-    return products.find((product) => barcodesMatch(product.barcode, barcode));
+    const resolved = resolveScannedBarcodeRow(products, barcode);
+    if (resolved.status === "exact" || resolved.status === "legacy") return resolved.row;
+    return undefined;
+  }
+
+  async function resolveScannedProduct(
+    trimmed: string,
+  ): Promise<{ product: ProductRow; legacy: boolean; oldBarcode: string } | "ambiguous" | null> {
+    const local = resolveScannedBarcodeRow(products, trimmed);
+    if (local.status === "exact") {
+      return { product: local.row, legacy: false, oldBarcode: "" };
+    }
+    if (local.status === "legacy") {
+      return { product: local.row, legacy: true, oldBarcode: local.oldBarcode };
+    }
+    if (local.status === "ambiguous") {
+      return "ambiguous";
+    }
+
+    try {
+      const exactRemote = await findProductByBarcode(trimmed);
+      if (exactRemote) {
+        return { product: exactRemote, legacy: false, oldBarcode: "" };
+      }
+
+      const truncated = legacyTruncatedFromScan(trimmed);
+      if (truncated) {
+        const legacyRemote = await findProductByBarcode(truncated);
+        if (legacyRemote) {
+          return {
+            product: legacyRemote,
+            legacy: true,
+            oldBarcode: legacyRemote.barcode ?? truncated,
+          };
+        }
+      }
+    } catch {
+      /* fallback to new product flow */
+    }
+
+    return null;
   }
 
   async function handleScan(code: string) {
     const trimmed = code.trim();
     if (!vendor || !trimmed) return;
 
-    let existingRow = findCachedProduct(trimmed);
-    if (!existingRow) {
+    const resolved = await resolveScannedProduct(trimmed);
+    if (resolved === "ambiguous") {
+      showToast(
+        "Barcode 3-digit skip se multiple products mile — pehle inventory fix karo.",
+        "error",
+      );
+      setBarcode("");
+      return;
+    }
+
+    let existingRow = resolved?.product;
+    if (resolved?.legacy && existingRow) {
+      const oldBarcode = resolved.oldBarcode || existingRow.barcode || "";
       try {
-        existingRow = (await findProductByBarcode(trimmed)) ?? undefined;
-        if (existingRow) {
-          setProducts((prev) =>
-            prev.some((p) => p.id === existingRow!.id) ? prev : [...prev, existingRow!],
-          );
-        }
-      } catch {
-        /* fallback to new product flow */
+        await healProductBarcode(existingRow.id, trimmed);
+        existingRow = { ...existingRow, barcode: trimmed };
+        showToast(`Barcode update: ${oldBarcode} → ${trimmed}`, "success");
+      } catch (err) {
+        showToast(
+          getErrorMessage(err, "Product mil gaya, lekin barcode auto-update fail hua."),
+          "error",
+        );
+        existingRow = { ...existingRow, barcode: trimmed };
       }
+    }
+
+    if (existingRow) {
+      setProducts((prev) => {
+        const without = prev.filter((p) => p.id !== existingRow!.id);
+        return [...without, existingRow!];
+      });
     }
 
     setScan({

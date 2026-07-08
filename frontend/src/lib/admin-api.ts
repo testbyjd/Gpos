@@ -1,4 +1,5 @@
 import { apiFetch, apiUpload } from "./api";
+import { barcodesEqual } from "./barcode";
 
 export interface ProductRow {
   id: number;
@@ -112,9 +113,7 @@ export async function findProductByBarcode(barcode: string): Promise<ProductRow 
 }
 
 export function barcodesMatch(a: string | null | undefined, b: string | null | undefined): boolean {
-  const left = (a ?? "").trim().toLowerCase();
-  const right = (b ?? "").trim().toLowerCase();
-  return left !== "" && left === right;
+  return barcodesEqual(a, b);
 }
 
 export interface CategoryRow {
