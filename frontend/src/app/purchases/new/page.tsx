@@ -75,6 +75,8 @@ export default function NewPurchasePage() {
 
   const barcodeRef = useRef<HTMLInputElement>(null);
   const postClientId = useRef<string | null>(null);
+  const autoScanHandled = useRef<string>("");
+  const scanInFlight = useRef(false);
 
   const subtotal = lines.reduce((s, l) => s + l.qty * l.cost, 0);
   const paidAmount = clampPaidAmount(subtotal, paidInput);
@@ -235,46 +237,72 @@ export default function NewPurchasePage() {
   async function handleScan(code: string) {
     const trimmed = code.trim();
     if (!vendor || !trimmed) return;
+    if (scan || scanInFlight.current) return;
 
-    const resolved = await resolveScannedProduct(trimmed);
-    if (resolved === "ambiguous") {
-      showToast(
-        "Barcode 3-digit skip se multiple products mile — pehle inventory fix karo.",
-        "error",
-      );
-      setBarcode("");
-      return;
-    }
-
-    let existingRow = resolved?.product;
-    if (resolved?.legacy && existingRow) {
-      const oldBarcode = resolved.oldBarcode || existingRow.barcode || "";
-      try {
-        await healProductBarcode(existingRow.id, trimmed);
-        existingRow = { ...existingRow, barcode: trimmed };
-        showToast(`Barcode update: ${oldBarcode} → ${trimmed}`, "success");
-      } catch (err) {
+    scanInFlight.current = true;
+    autoScanHandled.current = trimmed;
+    try {
+      const resolved = await resolveScannedProduct(trimmed);
+      if (resolved === "ambiguous") {
         showToast(
-          getErrorMessage(err, "Product mil gaya, lekin barcode auto-update fail hua."),
+          "Barcode 3-digit skip se multiple products mile — pehle inventory fix karo.",
           "error",
         );
-        existingRow = { ...existingRow, barcode: trimmed };
+        setBarcode("");
+        return;
       }
-    }
 
-    if (existingRow) {
-      setProducts((prev) => {
-        const without = prev.filter((p) => p.id !== existingRow!.id);
-        return [...without, existingRow!];
+      let existingRow = resolved?.product;
+      if (resolved?.legacy && existingRow) {
+        const oldBarcode = resolved.oldBarcode || existingRow.barcode || "";
+        try {
+          await healProductBarcode(existingRow.id, trimmed);
+          existingRow = { ...existingRow, barcode: trimmed };
+          showToast(`Barcode update: ${oldBarcode} → ${trimmed}`, "success");
+        } catch (err) {
+          showToast(
+            getErrorMessage(err, "Product mil gaya, lekin barcode auto-update fail hua."),
+            "error",
+          );
+          existingRow = { ...existingRow, barcode: trimmed };
+        }
+      }
+
+      if (existingRow) {
+        setProducts((prev) => {
+          const without = prev.filter((p) => p.id !== existingRow!.id);
+          return [...without, existingRow!];
+        });
+      }
+
+      setScan({
+        barcode: trimmed,
+        existing: existingRow ? toPurchaseProduct(existingRow) : undefined,
       });
+      setBarcode("");
+    } finally {
+      scanInFlight.current = false;
     }
-
-    setScan({
-      barcode: trimmed,
-      existing: existingRow ? toPurchaseProduct(existingRow) : undefined,
-    });
-    setBarcode("");
   }
+
+  // Scanner aksar Enter nahi bhejta — digit barcode pe auto-open (POS jaisa).
+  useEffect(() => {
+    const q = barcode.trim();
+    if (!q) {
+      autoScanHandled.current = "";
+      return;
+    }
+    if (!vendor || scan || scanInFlight.current) return;
+    if (!/^\d{10,}$/.test(q)) return;
+    if (autoScanHandled.current === q) return;
+
+    const timer = window.setTimeout(() => {
+      if (autoScanHandled.current === q || scanInFlight.current) return;
+      void handleScan(q);
+    }, 150);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [barcode, vendor, scan, products]);
 
   function addLine(line: Omit<DraftLine, "id">) {
     setLines((prev) => [...prev, { ...line, id: crypto.randomUUID() }]);
@@ -428,10 +456,13 @@ export default function NewPurchasePage() {
                     value={barcode}
                     onChange={(e) => setBarcode(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") handleScan(e.currentTarget.value);
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        void handleScan(e.currentTarget.value);
+                      }
                     }}
                     disabled={!vendor}
-                    placeholder={vendor ? "Scan barcode and it opens automatically…" : "Select a vendor first"}
+                    placeholder={vendor ? "Scan — Enter ki zaroorat nahi…" : "Select a vendor first"}
                     className={cn(inputCls, "pl-9 disabled:cursor-not-allowed disabled:opacity-60")}
                   />
                 </div>
