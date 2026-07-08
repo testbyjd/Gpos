@@ -85,6 +85,43 @@ class ProductController extends Controller
         return response()->json(['data' => new ProductResource($product->load('category'))]);
     }
 
+    /**
+     * Cashier-safe: only upgrades a truncated barcode to the full scanned value
+     * when it matches the old scanner "skip first 3 digits" rule.
+     */
+    public function healBarcode(Request $request, Product $product): JsonResponse
+    {
+        $data = $request->validate([
+            'barcode' => ['required', 'string', 'max:80'],
+        ]);
+
+        $full = ProductBarcode::normalize($data['barcode']);
+        if ($full === null) {
+            throw ValidationException::withMessages([
+                'barcode' => ['Barcode empty hai.'],
+            ]);
+        }
+
+        if (! ProductBarcode::isLegacyTruncation($product->barcode, $full)) {
+            throw ValidationException::withMessages([
+                'barcode' => ['Yeh barcode heal nahi ho sakta — pehle 3 digits skip wala match nahi mila.'],
+            ]);
+        }
+
+        $duplicate = ProductBarcode::applyMatch(Product::query(), $full)
+            ->where('id', '!=', $product->id)
+            ->exists();
+        if ($duplicate) {
+            throw ValidationException::withMessages([
+                'barcode' => ['Yeh full barcode pehle se kisi aur product par hai.'],
+            ]);
+        }
+
+        $product->update(['barcode' => $full]);
+
+        return response()->json(['data' => new ProductResource($product->load('category'))]);
+    }
+
     public function destroy(Product $product): JsonResponse
     {
         if ($product->isInUse()) {

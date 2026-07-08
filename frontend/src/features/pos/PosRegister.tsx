@@ -15,6 +15,7 @@ import { CartPanel } from "./components/CartPanel";
 import { PaymentModal } from "./components/PaymentModal";
 import { SaleSuccessModal, type SaleResult } from "./components/SaleSuccessModal";
 import { fetchCatalog } from "./api/catalog";
+import { healProductBarcode, resolveScannedBarcode } from "./api/barcode";
 import { fetchPosCustomers } from "./api/customers";
 import { submitSale } from "./api/sale";
 import { validateDiscountApproval } from "./discount";
@@ -43,12 +44,6 @@ function productMatchesQuery(p: Product, raw: string) {
     p.name.toLowerCase().includes(q) ||
     (p.barcode?.toLowerCase().includes(q) ?? false)
   );
-}
-
-function findByBarcode(products: Product[], code: string) {
-  const c = code.trim().toLowerCase();
-  if (!c) return undefined;
-  return products.find((p) => p.barcode?.trim().toLowerCase() === c);
 }
 
 interface CatalogCache {
@@ -122,14 +117,74 @@ export function PosRegister() {
     saleSearchRef.current?.focus();
   }
 
-  function submitSaleSearch(raw: string) {
+  function patchLocalBarcode(productId: string, fullBarcode: string) {
+    setProducts((prev) =>
+      prev.map((p) => (p.id === productId ? { ...p, barcode: fullBarcode } : p)),
+    );
+    setLines((prev) =>
+      prev.map((l) =>
+        l.product.id === productId
+          ? { ...l, product: { ...l.product, barcode: fullBarcode } }
+          : l,
+      ),
+    );
+    try {
+      const raw = localStorage.getItem(CATALOG_CACHE_KEY);
+      if (!raw) return;
+      const cache = JSON.parse(raw) as CatalogCache;
+      localStorage.setItem(
+        CATALOG_CACHE_KEY,
+        JSON.stringify({
+          ...cache,
+          products: cache.products.map((p) =>
+            p.id === productId ? { ...p, barcode: fullBarcode } : p,
+          ),
+        }),
+      );
+    } catch {
+      /* ignore cache write errors */
+    }
+  }
+
+  async function applyLegacyBarcodeHeal(product: Product, fullBarcode: string, oldBarcode: string) {
+    const healed: Product = { ...product, barcode: fullBarcode };
+    patchLocalBarcode(product.id, fullBarcode);
+    try {
+      await healProductBarcode(product.id, fullBarcode);
+      showToast(`Barcode update: ${oldBarcode || "…"} → ${fullBarcode}`, "success");
+    } catch (err) {
+      showToast(
+        getErrorMessage(err, "Product mil gaya, lekin barcode auto-update fail hua."),
+        "error",
+      );
+    }
+    return healed;
+  }
+
+  async function resolveBarcodeForPos(raw: string): Promise<Product | null> {
+    const resolved = resolveScannedBarcode(products, raw);
+    if (resolved.status === "exact") return resolved.product;
+    if (resolved.status === "legacy") {
+      return applyLegacyBarcodeHeal(resolved.product, resolved.fullBarcode, resolved.oldBarcode);
+    }
+    if (resolved.status === "ambiguous") {
+      showToast(
+        `Barcode 3-digit skip se ${resolved.products.length} products mile — manually select karo.`,
+        "error",
+      );
+      return null;
+    }
+    return null;
+  }
+
+  async function submitSaleSearch(raw: string) {
     const code = raw.trim();
     if (!code) return;
     if (catalogLoading || catalogError) {
       showToast("Catalog load nahi hua — abhi add nahi ho sakta.", "error");
       return;
     }
-    const byBarcode = findByBarcode(products, code);
+    const byBarcode = await resolveBarcodeForPos(code);
     if (byBarcode) {
       pickSaleProduct(byBarcode);
       return;
@@ -142,14 +197,14 @@ export function PosRegister() {
     setSaleQuery(code);
   }
 
-  function scanCatalogBarcode(raw: string) {
+  async function scanCatalogBarcode(raw: string) {
     const code = raw.trim();
     if (!code) return;
     if (catalogLoading || catalogError) {
       showToast("Catalog load nahi hua — scan abhi nahi chalega.", "error");
       return;
     }
-    const product = findByBarcode(products, code);
+    const product = await resolveBarcodeForPos(code);
     if (!product) {
       showToast(`Barcode "${code}" catalog mein nahi mila.`, "error");
       setCatalogQuery("");

@@ -11,6 +11,8 @@ Route::middleware('auth:sanctum')->prefix('inventory')->group(function () {
     Route::get('/categories', [CategoryController::class, 'index']);
     Route::get('/products', [ProductController::class, 'index']);
     Route::get('/products/{product}', [ProductController::class, 'show']);
+    // POS may heal truncated barcodes left by the old scanner skip-3 rule.
+    Route::post('/products/{product}/heal-barcode', [ProductController::class, 'healBarcode']);
 
     // Inventory edits are owner/manager only (plan §4.5).
     Route::middleware('role:owner,manager')->group(function () {

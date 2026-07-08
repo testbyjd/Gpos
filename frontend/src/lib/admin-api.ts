@@ -160,6 +160,14 @@ export function updateProduct(id: number, data: Partial<ProductInput>) {
   });
 }
 
+/** Cashier-safe: upgrade truncated barcode → full scan (legacy skip-3 rule). */
+export function healProductBarcode(id: number, barcode: string) {
+  return apiFetch<{ data: ProductRow }>(`/inventory/products/${id}/heal-barcode`, {
+    method: "POST",
+    body: JSON.stringify({ barcode }),
+  });
+}
+
 export function deleteProduct(id: number) {
   return apiFetch<{ ok: boolean; action: "deleted" | "deactivated"; message: string }>(
     `/inventory/products/${id}`,
