@@ -11,7 +11,13 @@ if [[ "$(id -u)" -ne 0 ]]; then
 fi
 
 cd "$APP_DIR"
-git pull
+
+# Source of truth = GitHub. Discard dirty/untracked server files that block pull.
+# (Does not touch gitignored paths like backend/.env or storage uploads.)
+echo "[update] Syncing to origin/main…"
+git fetch origin
+git reset --hard origin/main
+git clean -fd
 
 echo "[update] Timezone (Pakistan / Karachi)…"
 if command -v timedatectl >/dev/null 2>&1; then
