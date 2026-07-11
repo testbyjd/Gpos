@@ -8,12 +8,13 @@
  *
  * Default: http://127.0.0.1:9191
  *   GET  /health
- *   POST /drawer
+ *   POST /drawer  — cash drawer only
+ *   POST /print   — ESC/POS receipt (+ optional drawer) — no Windows print dialog
  *
  * Transports (config.json "transport"):
  *   "tcp"      — network printer raw port (:9100)
  *   "com"      — Virtual COM / serial (\\\\.\\COM3)
- *   "winspool" — Windows USB printer by name (USB001 / Bixolon driver) ★ recommended for SRP-352+
+ *   "winspool" — Windows USB printer by name (USB001 / Bixolon) ★ SRP-352+
  */
 
 const http = require("http");
@@ -22,6 +23,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { spawn } = require("child_process");
+const { buildEscPosReceipt } = require("./escpos-receipt");
 
 const configPath = path.join(__dirname, "config.json");
 const defaults = {
@@ -288,6 +290,34 @@ function json(res, status, body) {
   res.end(data);
 }
 
+function readJsonBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    req.on("data", (c) => {
+      size += c.length;
+      if (size > 2_000_000) {
+        reject(new Error("Body too large"));
+        req.destroy();
+        return;
+      }
+      chunks.push(c);
+    });
+    req.on("end", () => {
+      if (chunks.length === 0) {
+        resolve({});
+        return;
+      }
+      try {
+        resolve(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+      } catch {
+        reject(new Error("Invalid JSON body"));
+      }
+    });
+    req.on("error", reject);
+  });
+}
+
 const cfg = loadConfig();
 
 const server = http.createServer(async (req, res) => {
@@ -326,11 +356,54 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  json(res, 404, { ok: false, message: "Not found. Use GET /health or POST /drawer" });
+  if (req.method === "POST" && url.pathname === "/print") {
+    try {
+      const body = await readJsonBody(req);
+      let payload;
+
+      if (body.base64) {
+        payload = Buffer.from(String(body.base64), "base64");
+      } else if (body.receipt) {
+        payload = buildEscPosReceipt(body.receipt, {
+          openDrawer: Boolean(body.openDrawer),
+          drawerPin: cfg.drawerPin,
+          drawerOnMs: cfg.drawerOnMs,
+          drawerOffMs: cfg.drawerOffMs,
+        });
+      } else {
+        json(res, 422, {
+          ok: false,
+          message: "Body mein receipt ya base64 chahiye.",
+        });
+        return;
+      }
+
+      // If raw base64 and openDrawer, prepend kick
+      if (body.base64 && body.openDrawer) {
+        payload = Buffer.concat([drawerKickBuffer(cfg), payload]);
+      }
+
+      await sendToPrinter(cfg, payload);
+      json(res, 200, {
+        ok: true,
+        message: `Print sent (${printerLabel(cfg)})`,
+        openDrawer: Boolean(body.openDrawer),
+      });
+    } catch (err) {
+      json(res, 502, {
+        ok: false,
+        message: err?.message || "Print fail",
+        printer: printerLabel(cfg),
+      });
+    }
+    return;
+  }
+
+  json(res, 404, { ok: false, message: "Not found. Use GET /health, POST /drawer, POST /print" });
 });
 
 server.listen(Number(cfg.listenPort), cfg.listenHost, () => {
   console.log(`[gpos-print-bridge] listening http://${cfg.listenHost}:${cfg.listenPort}`);
   console.log(`[gpos-print-bridge] printer ${printerLabel(cfg)}`);
-  console.log(`[gpos-print-bridge] POST /drawer to open cash drawer`);
+  console.log(`[gpos-print-bridge] POST /drawer · POST /print`);
 });

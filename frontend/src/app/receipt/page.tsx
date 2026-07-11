@@ -12,7 +12,8 @@ import {
   type ReceiptSettings,
 } from "@/lib/admin-api";
 import { getErrorMessage } from "@/lib/api";
-import { ReceiptPreview } from "@/features/admin/components/ReceiptPreview";
+import { printReceiptDirect } from "@/lib/print-bridge";
+import { ReceiptPreview, SAMPLE_RECEIPT } from "@/features/admin/components/ReceiptPreview";
 import { AdminShell, PageAlert, PagePanel, PanelHeader } from "@/features/admin/components/AdminShell";
 
 const DEFAULTS = normalizeReceiptSettings({});
@@ -65,6 +66,7 @@ export default function ReceiptPage() {
   const [settings, setSettings] = useState<ReceiptSettings>(DEFAULTS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [testingPrint, setTestingPrint] = useState(false);
   const { toast, showToast, hideToast } = useAppToast();
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -113,6 +115,24 @@ export default function ReceiptPage() {
     );
   }
 
+  async function testPrintDirect() {
+    setTestingPrint(true);
+    try {
+      const res = await printReceiptDirect({
+        settings: settings as unknown as Record<string, unknown>,
+        data: SAMPLE_RECEIPT as unknown as Record<string, unknown>,
+        openDrawer: true,
+      });
+      if (res.ok) {
+        showToast(res.message || "Receipt + drawer printer pe bhej diya (bina Windows dialog).", "success");
+      } else {
+        showToast(res.message, "error");
+      }
+    } finally {
+      setTestingPrint(false);
+    }
+  }
+
   return (
     <AdminShell
       title="Receipt"
@@ -120,9 +140,9 @@ export default function ReceiptPage() {
       allowedRoles={["owner"]}
       actions={
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="secondary" onClick={() => window.print()}>
+          <Button size="sm" variant="secondary" onClick={() => void testPrintDirect()} disabled={testingPrint || loading}>
             <Printer className="h-4 w-4" />
-            Test print
+            {testingPrint ? "Printing…" : "Test print"}
           </Button>
           <Button size="sm" onClick={save} disabled={saving || loading}>
             <Save className="h-4 w-4" />

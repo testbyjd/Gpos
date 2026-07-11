@@ -189,7 +189,26 @@ Default: `http://127.0.0.1:9191`
 | Endpoint | Action |
 |----------|--------|
 | `GET /health` | Bridge alive? |
-| `POST /drawer` | Cash drawer open (ESC/POS pulse via printer) |
+| `POST /drawer` | Cash drawer only |
+| `POST /print` | ESC/POS receipt (+ optional `openDrawer`) — **Windows print dialog nahi** |
+
+`POST /print` body example:
+
+```json
+{
+  "openDrawer": true,
+  "receipt": {
+    "settings": { "shop_name": "Gondal Traders", "paper_width": "80" },
+    "data": {
+      "invoice_no": "INV-1",
+      "date": "12 Jul 2026",
+      "lines": [{ "name": "Item", "qty": 1, "price": 100 }]
+    }
+  }
+}
+```
+
+Receipt page **Test print** isi `/print` ko call karta hai (drawer + direct thermal).
 
 ---
 
