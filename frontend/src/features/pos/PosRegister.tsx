@@ -667,7 +667,7 @@ export function PosRegister() {
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[#f3f4f6] dark:bg-background">
+    <div className="pos-shell flex h-dvh flex-col overflow-hidden bg-background">
       <PosTopBar />
       <PosToolbar
         shelfOpen={productsOpen}

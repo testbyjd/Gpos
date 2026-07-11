@@ -57,7 +57,7 @@ export function MeriShelf({
         type="button"
         onClick={onToggle}
         aria-label="Items shelf kholo"
-        className="hidden w-10 shrink-0 flex-col items-center justify-center gap-2 border-l border-border/80 bg-white text-emerald-700 transition hover:bg-emerald-50 dark:bg-surface lg:flex"
+        className="hidden w-10 shrink-0 flex-col items-center justify-center gap-2 border-l border-border/80 bg-surface text-primary transition-colors hover:bg-primary/10 lg:flex"
       >
         <LayoutGrid className="h-4 w-4" />
         <span className="text-[10px] font-black uppercase tracking-wide [writing-mode:vertical-rl]">
@@ -68,10 +68,10 @@ export function MeriShelf({
   }
 
   return (
-    <aside className="flex h-full min-h-0 w-full min-w-0 flex-col border-l border-border/80 bg-white dark:bg-surface lg:w-[min(42%,420px)] lg:shrink-0">
+    <aside className="flex h-full min-h-0 w-full min-w-0 flex-col border-l border-border/80 bg-surface lg:w-[min(42%,420px)] lg:shrink-0">
       <div className="flex items-start justify-between gap-2 border-b border-border/70 px-3 py-3">
         <div>
-          <h2 className="text-sm font-black uppercase tracking-wide text-emerald-700">
+          <h2 className="text-sm font-black uppercase tracking-wide text-primary">
             Meri Shelf
           </h2>
           <p className="text-xs text-muted-foreground">{shelfProducts.length} items</p>
@@ -86,7 +86,7 @@ export function MeriShelf({
             <button
               type="button"
               onClick={() => setPicking(false)}
-              className="inline-flex h-8 items-center rounded-md bg-emerald-600 px-3 text-xs font-bold text-white hover:bg-emerald-700"
+              className="inline-flex h-8 items-center rounded-md bg-primary px-3 text-xs font-bold text-primary-foreground transition-colors hover:bg-primary-hover"
             >
               Done
             </button>
@@ -94,7 +94,7 @@ export function MeriShelf({
             <button
               type="button"
               onClick={() => setPicking(true)}
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-emerald-300 px-2 text-xs font-bold text-emerald-700 hover:bg-emerald-50"
+              className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/40 px-2 text-xs font-bold text-primary transition-colors hover:bg-primary/10"
             >
               <Plus className="h-3.5 w-3.5" />
               Add product
@@ -103,7 +103,7 @@ export function MeriShelf({
           <button
             type="button"
             onClick={onToggle}
-            className="hidden h-8 rounded-md border border-border px-2 text-xs font-bold text-muted-foreground hover:bg-card-hover lg:inline-flex"
+            className="hidden h-8 rounded-md border border-border px-2 text-xs font-bold text-muted-foreground transition-colors hover:bg-card-hover lg:inline-flex"
           >
             Band
           </button>
@@ -115,7 +115,7 @@ export function MeriShelf({
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           placeholder="Shelf filter — naam ya barcode..."
-          className="h-10 w-full rounded-lg border border-border/80 bg-[#f9fafb] px-3 text-sm font-semibold outline-none focus:border-emerald-500 dark:bg-input"
+          className="h-10 w-full rounded-lg border border-border/80 bg-muted/40 px-3 text-sm font-semibold outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-ring/20"
         />
       </div>
 
@@ -132,10 +132,10 @@ export function MeriShelf({
                     <button
                       type="button"
                       onClick={() => onToggleShelf(p.id)}
-                      className="flex w-full items-center gap-2 rounded-lg border border-border/70 px-2 py-2 text-left hover:bg-card-hover"
+                      className="flex w-full items-center gap-2 rounded-lg border border-border/70 px-2 py-2 text-left transition-colors hover:bg-card-hover hover:border-primary/40"
                     >
                       <span className="truncate text-sm font-semibold">{p.name}</span>
-                      <Star className="ml-auto h-4 w-4 shrink-0 text-amber-500" />
+                      <Star className="ml-auto h-4 w-4 shrink-0 text-warning" />
                     </button>
                   </li>
                 ))}
@@ -154,7 +154,7 @@ export function MeriShelf({
             <button
               type="button"
               onClick={() => setPicking(true)}
-              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-emerald-300 px-3 text-xs font-bold text-emerald-700"
+              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-primary/40 px-3 text-xs font-bold text-primary transition-colors hover:bg-primary/10"
             >
               <Plus className="h-3.5 w-3.5" />
               Add product
@@ -165,14 +165,14 @@ export function MeriShelf({
             {shelfProducts.map((p) => (
               <div
                 key={p.id}
-                className="relative overflow-hidden rounded-xl border border-border/80 bg-[#f8fafc] dark:bg-card"
+                className="card-lift relative overflow-hidden rounded-xl border border-border/80 bg-card"
               >
                 <button
                   type="button"
                   onClick={() => onAdd(p)}
-                  className="flex w-full flex-col items-stretch p-2 text-left hover:bg-white dark:hover:bg-card-hover"
+                  className="flex w-full flex-col items-stretch p-2 text-left"
                 >
-                  <span className="mb-2 flex h-16 items-center justify-center overflow-hidden rounded-md bg-white ring-1 ring-border/40">
+                  <span className="mb-2 flex h-16 items-center justify-center overflow-hidden rounded-md bg-surface ring-1 ring-border/40">
                     {p.imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -185,14 +185,14 @@ export function MeriShelf({
                     )}
                   </span>
                   <span className="line-clamp-2 text-xs font-bold leading-snug">{p.name}</span>
-                  <span className="mt-1 text-sm font-black tabular-nums text-emerald-600">
+                  <span className="mt-1 text-sm font-black tabular-nums text-primary">
                     {formatMoney(p.price)}
                   </span>
                 </button>
                 <button
                   type="button"
                   onClick={() => onToggleShelf(p.id)}
-                  className="absolute right-1.5 top-1.5 inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/95 text-amber-500 shadow-sm ring-1 ring-border/60"
+                  className="absolute right-1.5 top-1.5 inline-flex h-7 w-7 items-center justify-center rounded-full bg-surface/95 text-warning shadow-sm ring-1 ring-border/60 backdrop-blur transition-colors hover:bg-surface"
                   aria-label="Shelf se hatao"
                 >
                   <StarOff className="h-3.5 w-3.5" />

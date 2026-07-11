@@ -9,6 +9,8 @@ import {
   LogOut,
   Moon,
   Store,
+  Sun,
+  Sparkles,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -19,7 +21,7 @@ import { Clock } from "./Clock";
 import { ConnectionStatus } from "./ConnectionStatus";
 
 const navBtn =
-  "inline-flex h-9 items-center gap-1.5 rounded-lg border border-border/80 bg-card px-3 text-sm font-semibold text-muted-foreground transition-colors hover:bg-card-hover hover:text-foreground";
+  "inline-flex h-9 items-center gap-1.5 rounded-xl border border-border/70 bg-card/80 px-3 text-sm font-semibold text-muted-foreground shadow-sm transition-all hover:-translate-y-px hover:border-primary/25 hover:bg-card hover:text-foreground hover:shadow-md active:translate-y-0 active:scale-[0.98]";
 
 export function PosTopBar() {
   const router = useRouter();
@@ -35,16 +37,20 @@ export function PosTopBar() {
   }
 
   return (
-    <header className="relative z-40 flex h-[3.25rem] shrink-0 items-center justify-between gap-3 border-b border-border/80 bg-white px-3 dark:bg-surface sm:px-4">
+    <header className="relative z-40 flex h-[3.75rem] shrink-0 items-center justify-between gap-3 border-b border-border/70 bg-surface/95 px-3 shadow-[0_1px_12px_rgb(15_23_42/0.04)] backdrop-blur-xl sm:px-5">
       <div className="flex min-w-0 items-center gap-2.5">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white shadow-sm">
+        <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-gradient-to-br from-primary to-primary-hover text-primary-foreground shadow-md shadow-primary/20 ring-1 ring-white/20">
           <Store className="h-5 w-5" />
+          <Sparkles className="absolute -right-1 -top-1 h-3 w-3 rounded-full bg-surface p-0.5 text-primary" />
         </div>
         <div className="min-w-0 leading-tight">
-          <h1 className="truncate text-sm font-black text-foreground sm:text-base">
+          <h1 className="truncate text-sm font-black tracking-tight text-foreground sm:text-base">
             Gondal Traders Wholesale
           </h1>
-          <p className="text-[11px] font-medium text-muted-foreground">Register 402D</p>
+          <p className="mt-0.5 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-success shadow-[0_0_0_3px_color-mix(in_oklab,var(--success),transparent_82%)]" />
+            Register 402D · Ready
+          </p>
         </div>
       </div>
 
@@ -87,8 +93,8 @@ export function PosTopBar() {
           className={navBtn}
           aria-label="Toggle dark mode"
         >
-          <Moon className="h-4 w-4" />
-          <span className="hidden sm:inline">Black</span>
+          {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          <span className="hidden sm:inline">{isDark ? "Light" : "Dark"}</span>
         </button>
       </div>
 
