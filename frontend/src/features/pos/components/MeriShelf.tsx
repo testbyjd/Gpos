@@ -34,7 +34,14 @@ export function MeriShelf({
           !q ||
           p.name.toLowerCase().includes(q) ||
           (p.barcode?.toLowerCase().includes(q) ?? false),
-      );
+      )
+      .slice()
+      .sort((a, b) => {
+        const aOut = Number(a.stock) <= 0 ? 1 : 0;
+        const bOut = Number(b.stock) <= 0 ? 1 : 0;
+        if (aOut !== bOut) return aOut - bOut;
+        return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+      });
   }, [products, shelfIds, filter]);
 
   const pickerProducts = useMemo(() => {
@@ -162,15 +169,25 @@ export function MeriShelf({
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-2">
-            {shelfProducts.map((p) => (
+            {shelfProducts.map((p) => {
+              const outOfStock = Number(p.stock) <= 0;
+              return (
               <div
                 key={p.id}
-                className="card-lift relative overflow-hidden rounded-xl border border-border/80 bg-card"
+                className={`card-lift relative overflow-hidden rounded-xl border bg-card ${
+                  outOfStock
+                    ? "border-border/50 opacity-55"
+                    : "border-border/80"
+                }`}
               >
                 <button
                   type="button"
-                  onClick={() => onAdd(p)}
-                  className="flex w-full flex-col items-stretch p-2 text-left"
+                  onClick={() => {
+                    if (outOfStock) return;
+                    onAdd(p);
+                  }}
+                  disabled={outOfStock}
+                  className="flex w-full flex-col items-stretch p-2 text-left disabled:cursor-not-allowed"
                 >
                   <span className="mb-2 flex h-16 items-center justify-center overflow-hidden rounded-md bg-surface ring-1 ring-border/40">
                     {p.imageUrl ? (
@@ -185,9 +202,15 @@ export function MeriShelf({
                     )}
                   </span>
                   <span className="line-clamp-2 text-xs font-bold leading-snug">{p.name}</span>
-                  <span className="mt-1 text-sm font-black tabular-nums text-primary">
-                    {formatMoney(p.price)}
-                  </span>
+                  {outOfStock ? (
+                    <span className="mt-1 text-[11px] font-black uppercase tracking-wide text-danger">
+                      Out of stock
+                    </span>
+                  ) : (
+                    <span className="mt-1 text-sm font-black tabular-nums text-primary">
+                      {formatMoney(p.price)}
+                    </span>
+                  )}
                 </button>
                 <button
                   type="button"
@@ -198,7 +221,8 @@ export function MeriShelf({
                   <StarOff className="h-3.5 w-3.5" />
                 </button>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

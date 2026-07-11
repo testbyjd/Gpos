@@ -23,12 +23,23 @@ export function ProductGrid({ products, onAdd }: Props) {
   return (
     <div className="grid grid-cols-[repeat(auto-fill,minmax(12.5rem,1fr))] gap-1.5">
       {products.map((p) => {
-        const low = p.stock <= 10;
+        const outOfStock = Number(p.stock) <= 0;
+        const low = !outOfStock && p.stock <= 10;
         return (
           <button
             key={p.id}
-            onClick={() => onAdd(p)}
-            className="group flex items-stretch gap-2 rounded-lg border border-border/80 bg-card p-1.5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/45 hover:bg-card-hover hover:shadow-md active:translate-y-0 active:scale-[0.99]"
+            type="button"
+            disabled={outOfStock}
+            onClick={() => {
+              if (outOfStock) return;
+              onAdd(p);
+            }}
+            className={cn(
+              "group flex items-stretch gap-2 rounded-lg border border-border/80 bg-card p-1.5 text-left shadow-sm transition-all",
+              outOfStock
+                ? "cursor-not-allowed opacity-50"
+                : "hover:-translate-y-0.5 hover:border-primary/45 hover:bg-card-hover hover:shadow-md active:translate-y-0 active:scale-[0.99]",
+            )}
           >
             <div className="relative flex size-[4.25rem] shrink-0 items-center justify-center overflow-hidden rounded-md bg-white shadow-inner ring-1 ring-border/40">
               {p.imageUrl ? (
@@ -51,12 +62,14 @@ export function ProductGrid({ products, onAdd }: Props) {
                 <span
                   className={cn(
                     "mt-1 inline-block rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-4",
-                    low
-                      ? "bg-warning/15 text-warning ring-1 ring-warning/20"
-                      : "bg-muted text-muted-foreground ring-1 ring-border/70",
+                    outOfStock
+                      ? "bg-danger/15 text-danger ring-1 ring-danger/20"
+                      : low
+                        ? "bg-warning/15 text-warning ring-1 ring-warning/20"
+                        : "bg-muted text-muted-foreground ring-1 ring-border/70",
                   )}
                 >
-                  {low ? "Low stock" : `${p.stock} ${p.unit}`}
+                  {outOfStock ? "Out of stock" : low ? "Low stock" : `${p.stock} ${p.unit}`}
                 </span>
               </span>
               <span className="text-sm font-black tabular-nums text-primary">

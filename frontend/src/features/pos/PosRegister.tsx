@@ -140,16 +140,37 @@ export function PosRegister() {
   }
 
   function addProduct(p: Product) {
-    setLines((prev) => {
-      const existing = prev.find((l) => l.product.id === p.id);
-      // kg: pehli add 0.200 (200g); dubara add pe +0.200. Baqi units: 1.
-      const step = p.fractional ? 0.2 : 1;
-      if (existing) {
-        const updated = { ...existing, qty: Math.round((existing.qty + step) * 1000) / 1000 };
-        return [updated, ...prev.filter((l) => l.product.id !== p.id)];
+    const stock = Number(p.stock);
+    if (!Number.isFinite(stock) || stock <= 0) {
+      showToast(`"${p.name}" out of stock — add nahi ho sakta.`, "error");
+      return;
+    }
+
+    const step = p.fractional ? 0.2 : 1;
+    const existing = lines.find((l) => l.product.id === p.id);
+    if (existing) {
+      const nextQty = Math.round((existing.qty + step) * 1000) / 1000;
+      if (nextQty > stock) {
+        showToast(
+          `"${p.name}" mein sirf ${stock} ${p.unit} stock hai — zyada add nahi.`,
+          "error",
+        );
+        return;
       }
-      return [{ product: p, qty: step }, ...prev];
-    });
+      setLines((prev) => {
+        const cur = prev.find((l) => l.product.id === p.id);
+        if (!cur) return [{ product: p, qty: Math.min(step, stock) }, ...prev];
+        const updated = {
+          ...cur,
+          qty: Math.round((cur.qty + step) * 1000) / 1000,
+          product: { ...cur.product, ...p },
+        };
+        return [updated, ...prev.filter((l) => l.product.id !== p.id)];
+      });
+      return;
+    }
+
+    setLines((prev) => [{ product: p, qty: Math.min(step, stock) }, ...prev]);
   }
 
   function pickSaleProduct(p: Product) {
@@ -258,10 +279,25 @@ export function PosRegister() {
       removeLine(id);
       return;
     }
+    const line = lines.find((l) => l.product.id === id);
+    if (!line) return;
+    const stock = Number(line.product.stock);
+    const capped =
+      Number.isFinite(stock) && stock >= 0 ? Math.min(rounded, stock) : rounded;
+    if (capped < rounded) {
+      showToast(
+        `"${line.product.name}" mein sirf ${stock} ${line.product.unit} stock hai.`,
+        "error",
+      );
+    }
+    if (capped <= 0) {
+      removeLine(id);
+      return;
+    }
     setLines((prev) =>
       prev.map((l) => {
         if (l.product.id !== id) return l;
-        const next = { ...l, qty: rounded };
+        const next = { ...l, qty: capped };
         const max = maxLineDiscount(next);
         const disc = Math.min(max, Math.max(0, l.discount ?? 0));
         return { ...next, discount: disc > 0 ? disc : undefined };

@@ -242,12 +242,22 @@ export function BillingWorkspace(props: Props) {
               </p>
             ) : (
               <ul className="divide-y divide-border/70">
-                {saleResults.map((p) => (
+                {saleResults.map((p) => {
+                  const outOfStock = Number(p.stock) <= 0;
+                  return (
                   <li key={p.id}>
                     <button
                       type="button"
-                      onClick={() => onPickSale(p)}
-                      className="flex w-full items-center gap-2 px-2 py-2 text-left transition-colors hover:bg-card-hover"
+                      disabled={outOfStock}
+                      onClick={() => {
+                        if (outOfStock) return;
+                        onPickSale(p);
+                      }}
+                      className={`flex w-full items-center gap-2 px-2 py-2 text-left transition-colors ${
+                        outOfStock
+                          ? "cursor-not-allowed opacity-50"
+                          : "hover:bg-card-hover"
+                      }`}
                     >
                       <span className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-surface ring-1 ring-border/40">
                         {p.imageUrl ? (
@@ -263,9 +273,14 @@ export function BillingWorkspace(props: Props) {
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-semibold">{p.name}</span>
-                        <span className="text-[11px] text-muted-foreground">
-                          {p.stock} {p.unit}
-                          {p.barcode ? ` · ${p.barcode}` : ""}
+                        <span
+                          className={`text-[11px] ${
+                            outOfStock ? "font-bold text-danger" : "text-muted-foreground"
+                          }`}
+                        >
+                          {outOfStock
+                            ? "Out of stock"
+                            : `${p.stock} ${p.unit}${p.barcode ? ` · ${p.barcode}` : ""}`}
                         </span>
                       </span>
                       <span className="shrink-0 text-sm font-black tabular-nums text-primary">
@@ -273,7 +288,8 @@ export function BillingWorkspace(props: Props) {
                       </span>
                     </button>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             )}
           </div>
