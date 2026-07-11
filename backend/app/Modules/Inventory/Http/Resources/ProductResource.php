@@ -23,7 +23,7 @@ class ProductResource extends JsonResource
             'image_url' => $this->image_url,
             'unit' => $this->unit,
             'unit_precision' => $this->unit_precision,
-            'fractional' => $this->unit_precision > 0,
+            'fractional' => strtolower((string) $this->unit) === 'kg' || $this->unit_precision > 0,
             // Cost price is hidden from cashiers (plan §4.5).
             $this->mergeWhen($canSeeCost, fn () => ['avg_cost' => (float) $this->avg_cost]),
             'sell_price' => (float) $this->sell_price,
@@ -33,6 +33,7 @@ class ProductResource extends JsonResource
             'low_stock_threshold' => (float) $this->low_stock_threshold,
             'expiry_date' => $this->expiry_date?->toDateString(),
             'is_active' => (bool) $this->is_active,
+            'vendor_name' => $this->last_vendor_name ?? null,
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];
     }

@@ -471,8 +471,7 @@ export default function NewPurchasePage() {
 
             <div className="mt-3 flex items-center justify-between gap-3 border-t border-border/70 pt-3">
               <p className="text-xs text-muted-foreground">
-                Scan a packaged item, or add loose / unbarcoded goods manually.
-                Manual add bina barcode ke hamesha naya product banata hai — packaged items scan karo.
+                Packaged: scan barcode. Loose / dobara: <span className="font-semibold text-foreground">Add manually</span> → name search se purana item select karo.
               </p>
               <Button
                 variant="secondary"
@@ -659,6 +658,7 @@ export default function NewPurchasePage() {
         <ReceiveItemModal
           barcode={scan.barcode}
           existing={scan.existing}
+          catalog={products.map(toPurchaseProduct)}
           categories={categories}
           onAdd={addLine}
           onClose={() => setScan(null)}

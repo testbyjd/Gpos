@@ -37,11 +37,28 @@ class SyncController extends Controller
             'sales.*.lines.*.unit_price' => ['required', 'numeric', 'min:0'],
             'sales.*.lines.*.line_total' => ['required', 'numeric', 'min:0'],
             'sales.*.payments' => ['required', 'array', 'min:1'],
-            'sales.*.payments.*.method' => ['required', 'string', 'in:cash,card,wallet,khata,split'],
+            'sales.*.payments.*.method' => ['required', 'string', 'in:cash,card,khata,split,easypaisa,jazzcash,bank_transfer'],
             'sales.*.payments.*.amount' => ['required', 'numeric', 'min:0'],
             'sales.*.payments.*.tendered' => ['nullable', 'numeric', 'min:0'],
             'sales.*.payments.*.change' => ['nullable', 'numeric', 'min:0'],
+            'sales.*.payments.*.reference_id' => ['nullable', 'string', 'max:120'],
         ]);
+
+        foreach ($data['sales'] as $salePayload) {
+            foreach ($salePayload['payments'] as $payment) {
+                $method = $payment['method'];
+                if ($method !== 'cash' && trim((string) ($payment['reference_id'] ?? '')) === '') {
+                    return response()->json([
+                        'message' => 'Cash ke ilawa har payment pe reference ID lazmi hai.',
+                    ], 422);
+                }
+                if ($method === 'khata' && empty($salePayload['customer_id'])) {
+                    return response()->json([
+                        'message' => 'Khata / udhar ke liye customer select karna lazmi hai.',
+                    ], 422);
+                }
+            }
+        }
 
         $results = [];
 

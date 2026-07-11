@@ -284,8 +284,8 @@ export default function InventoryPage() {
           ) : (
             <>
               <DataTable
-                columns={["Product", "SKU", "Category", "Stock", "Avg cost", "Price", "Expiry", "State", ""]}
-                minWidth="960px"
+                columns={["Product", "SKU", "Category", "Stock", "Avg cost", "Price", "Expiry", "Vendor", "State", ""]}
+                minWidth="1040px"
                 emptyLabel="Is filter pe koi product nahi."
                 rows={products.map((p) => {
                   const isLow = Number(p.stock_qty) <= Number(p.low_stock_threshold);
@@ -310,6 +310,9 @@ export default function InventoryPage() {
                     <span key="cost" className="tabular-nums text-muted-foreground">{formatMoney(Number(p.avg_cost))}</span>,
                     <span key="price" className="font-bold tabular-nums text-primary">{formatMoney(Number(p.sell_price))}</span>,
                     <span key="expiry">{expiryPill(p.expiry_date)}</span>,
+                    <span key="vendor" className="max-w-[140px] truncate text-sm text-muted-foreground" title={p.vendor_name ?? undefined}>
+                      {p.vendor_name?.trim() || "—"}
+                    </span>,
                     <StatusPill key="statepill" tone={isLow ? "warn" : "good"}>{isLow ? "Low" : "OK"}</StatusPill>,
                     <div key="actions" className="flex justify-end gap-1">
                       <button

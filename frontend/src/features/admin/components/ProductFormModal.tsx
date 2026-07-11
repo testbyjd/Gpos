@@ -111,12 +111,14 @@ export function ProductFormModal({ product, categories, onClose, onSaved, onCate
   }
 
   function buildPayload(): ProductInput {
+    const isKg = unit.trim().toLowerCase() === "kg";
     return {
       name: name.trim(),
       barcode: barcode.trim() || null,
       sku: sku.trim() || null,
       category_id: categoryId ? Number(categoryId) : null,
       unit,
+      unit_precision: isKg ? 3 : 0,
       sell_price: Number(sellPrice),
       avg_cost: Number(avgCost) || 0,
       stock_qty: Number(stockQty) || 0,

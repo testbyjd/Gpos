@@ -8,6 +8,7 @@ import { cn, formatMoney } from "@/lib/utils";
 import { getReports } from "@/lib/admin-api";
 import { getErrorMessage } from "@/lib/api";
 import { writeOffReasonLabel } from "@/features/inventory/components/WriteOffModal";
+import { paymentMethodLabel } from "@/features/pos/paymentMethods";
 import {
   AdminShell,
   DataTable,
@@ -299,7 +300,7 @@ export default function ReportsPage() {
             <DataTable
               columns={["Method", "Amount"]}
               rows={(data.payment_breakdown ?? []).map((row) => [
-                <span key="method" className="font-bold capitalize text-foreground">{row.method}</span>,
+                <span key="method" className="font-bold text-foreground">{paymentMethodLabel(row.method)}</span>,
                 <span key="amount" className="font-black tabular-nums text-foreground">{formatMoney(row.amount)}</span>,
               ])}
             />

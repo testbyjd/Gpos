@@ -8,6 +8,8 @@ import { formatMoney } from "@/lib/utils";
 import { useModalDismiss } from "@/lib/hooks/useModalDismiss";
 import { DENOMINATIONS } from "./data";
 import { getTillSummary, type TillSummary } from "./api";
+import { PaymentHandoverPanel } from "./PaymentHandoverPanel";
+import { NonCashSettlePanel } from "./NonCashSettlePanel";
 
 interface Props {
   onClose: () => void;
@@ -29,6 +31,7 @@ export function CashCountModal({ onClose }: Props) {
   const [summary, setSummary] = useState<TillSummary | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [counts, setCounts] = useState<Record<number, string>>({});
+  const [nonCashOk, setNonCashOk] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -49,13 +52,18 @@ export function CashCountModal({ onClose }: Props) {
     setCounts((prev) => ({ ...prev, [denom]: value.replace(/[^0-9]/g, "") }));
   }
 
-  if (typeof document === "undefined") return null;
+  const breakdown = useMemo(() => {
+    if (summary?.payment_breakdown?.length) return summary.payment_breakdown;
+    return [
+      { method: "card", amount: summary?.card_total ?? 0 },
+      { method: "easypaisa", amount: 0 },
+      { method: "jazzcash", amount: 0 },
+      { method: "bank_transfer", amount: 0 },
+      { method: "khata", amount: summary?.khata_total ?? 0 },
+    ];
+  }, [summary]);
 
-  const settlements: [string, number | undefined][] = [
-    ["Card", summary?.card_total],
-    ["Wallet / QR", summary?.wallet_total],
-    ["Khata extended", summary?.khata_total],
-  ];
+  if (typeof document === "undefined") return null;
 
   return createPortal(
     <div
@@ -147,21 +155,20 @@ export function CashCountModal({ onClose }: Props) {
 
             {/* Info side */}
             <div className="space-y-4">
-              <div className="rounded-lg border border-border/80 bg-card p-4">
-                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                  Other settlements (for record)
-                </p>
-                <div className="mt-3 space-y-2 text-sm">
-                  {settlements.map(([label, value]) => (
-                    <div key={label} className="flex justify-between">
-                      <span className="text-muted-foreground">{label}</span>
-                      <span className="font-bold tabular-nums text-foreground">
-                        {value === undefined ? "—" : formatMoney(value)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <PaymentHandoverPanel
+                rows={breakdown}
+                hideCash
+                title="Payment methods — expected"
+                hint="Session totals. Neeche checklist tick karo jab slips ready hon."
+              />
+
+              <NonCashSettlePanel
+                rows={breakdown}
+                mode="checklist"
+                title="Non-cash handover checklist"
+                hint="Har method tick = slip / transfer ready. Miss ho to manager ko batao."
+                onChange={(_s, ok) => setNonCashOk(ok)}
+              />
 
               <div className="rounded-lg border border-accent/30 bg-accent/5 p-4">
                 <p className="flex items-center gap-1.5 text-sm font-bold text-foreground">
@@ -169,10 +176,20 @@ export function CashCountModal({ onClose }: Props) {
                   Hand over to manager
                 </p>
                 <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-                  Apni cash gin kar drawer taiyaar rakho. Expected cash aur
-                  variance manager/owner till close karte waqt dekhenge — yeh
-                  view sirf ginti ke liye hai.
+                  Counted cash + upar wali confirmed payment list manager/owner ko do. Expected
+                  cash aur variance sirf till close pe dikhte hain.
                 </p>
+                <div className="mt-3 flex items-baseline justify-between rounded-md bg-white/60 px-3 py-2 dark:bg-black/20">
+                  <span className="text-xs font-bold text-muted-foreground">Cash to hand over</span>
+                  <span className="text-lg font-black tabular-nums text-foreground">
+                    {formatMoney(countedCash)}
+                  </span>
+                </div>
+                {!nonCashOk && (
+                  <p className="mt-2 text-xs font-bold text-danger">
+                    Pehle non-cash methods tick karo — phir Done.
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -185,7 +202,7 @@ export function CashCountModal({ onClose }: Props) {
               <Printer className="h-5 w-5" />
               Print
             </Button>
-            <Button size="lg" className="col-span-2" onClick={onClose}>
+            <Button size="lg" className="col-span-2" onClick={onClose} disabled={!nonCashOk}>
               Done
             </Button>
           </div>

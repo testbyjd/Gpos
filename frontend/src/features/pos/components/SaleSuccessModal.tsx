@@ -6,14 +6,9 @@ import { Button } from "@/components/ui/button";
 import { formatMoney } from "@/lib/utils";
 import { useModalDismiss } from "@/lib/hooks/useModalDismiss";
 import type { PaymentMethod } from "../types";
+import { PAYMENT_METHOD_LABEL } from "../paymentMethods";
 
-const METHOD_LABEL: Record<PaymentMethod, string> = {
-  cash: "Cash",
-  card: "Card",
-  wallet: "Wallet / QR",
-  khata: "Khata",
-  split: "Split",
-};
+const METHOD_LABEL = PAYMENT_METHOD_LABEL;
 
 export interface SaleResult {
   invoice: string;
@@ -22,6 +17,7 @@ export interface SaleResult {
   change: number;
   method: PaymentMethod;
   customer: string;
+  referenceId?: string;
 }
 
 interface Props {
@@ -106,6 +102,12 @@ export function SaleSuccessModal({ sale, onClose }: Props) {
             <span className="text-muted-foreground">Payment</span>
             <span className="font-bold text-foreground">{METHOD_LABEL[sale.method]}</span>
           </div>
+          {sale.referenceId && (
+            <div className="flex justify-between gap-3">
+              <span className="shrink-0 text-muted-foreground">Reference</span>
+              <span className="truncate font-bold text-foreground">{sale.referenceId}</span>
+            </div>
+          )}
           <div className="flex justify-between">
             <span className="text-muted-foreground">Customer</span>
             <span className="font-bold text-foreground">{sale.customer}</span>

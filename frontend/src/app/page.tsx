@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getStoredUser, type AuthUser } from "@/lib/auth";
+import { appHref } from "@/lib/app-path";
 import { PosRegister } from "@/features/pos/PosRegister";
 
 export default function Home() {
@@ -11,7 +12,7 @@ export default function Home() {
   useEffect(() => {
     const stored = getStoredUser();
     if (!stored) {
-      window.location.replace("/login");
+      window.location.replace(appHref("/login"));
       return;
     }
     setUser(stored);

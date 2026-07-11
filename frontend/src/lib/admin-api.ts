@@ -18,14 +18,29 @@ export interface ProductRow {
   expiry_date: string | null;
   is_active: boolean;
   image_url?: string | null;
+  /** Last GRN vendor (if ever purchased). */
+  vendor_name?: string | null;
+}
+
+export type VendorContactRole = "salesperson" | "delivery" | "accounts" | "owner" | "other";
+
+export interface VendorContact {
+  id?: number;
+  name: string;
+  phone?: string | null;
+  role: VendorContactRole;
+  note?: string | null;
 }
 
 export interface VendorRow {
   id: number;
   name: string;
   phone?: string | null;
+  address?: string | null;
   balance: string | number;
   is_active: boolean;
+  ranking?: number;
+  contacts?: VendorContact[];
 }
 
 export interface CustomerRow {
@@ -127,6 +142,7 @@ export interface ProductInput {
   sku?: string | null;
   category_id?: number | null;
   unit: string;
+  unit_precision?: number;
   sell_price: number;
   avg_cost?: number;
   stock_qty?: number;
@@ -224,9 +240,26 @@ export function listVendors() {
   return apiFetch<{ data: VendorRow[] }>("/vendors");
 }
 
-export function createVendor(data: { name: string; phone?: string | null; address?: string | null }) {
+export function createVendor(data: { name: string; phone?: string | null; address?: string | null; ranking?: number }) {
   return apiFetch<{ data: VendorRow }>("/vendors", {
     method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateVendor(
+  id: number,
+  data: {
+    name?: string;
+    phone?: string | null;
+    address?: string | null;
+    ranking?: number;
+    is_active?: boolean;
+    contacts?: VendorContact[];
+  },
+) {
+  return apiFetch<{ data: VendorRow }>(`/vendors/${id}`, {
+    method: "PUT",
     body: JSON.stringify(data),
   });
 }
@@ -248,6 +281,7 @@ export interface SalePayment {
   id: number;
   method: string;
   amount: string | number;
+  reference_id?: string | null;
 }
 
 export interface SaleRow {
@@ -289,6 +323,7 @@ export interface ListSalesParams {
   paymentMethod?: string;
   from?: string;
   to?: string;
+  q?: string;
   page?: number;
   perPage?: number;
 }
@@ -299,6 +334,7 @@ export function listSales(params: ListSalesParams = {}) {
   if (params.paymentMethod) q.set("payment_method", params.paymentMethod);
   if (params.from) q.set("from", params.from);
   if (params.to) q.set("to", params.to);
+  if (params.q) q.set("q", params.q);
   if (params.page) q.set("page", String(params.page));
   if (params.perPage) q.set("per_page", String(params.perPage));
   const qs = q.toString();

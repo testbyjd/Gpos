@@ -6,6 +6,7 @@ import { LockKeyhole, Store } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { getStoredUser, homePathForRole, login, logout } from "@/lib/auth";
 import { getErrorMessage } from "@/lib/api";
+import { appHref } from "@/lib/app-path";
 
 function LoginForm() {
   const searchParams = useSearchParams();
@@ -25,7 +26,7 @@ function LoginForm() {
 
     const stored = getStoredUser();
     if (stored) {
-      window.location.replace(homePathForRole(stored.role));
+      window.location.replace(appHref(homePathForRole(stored.role)));
       return;
     }
 
@@ -46,7 +47,7 @@ function LoginForm() {
     setLoading(true);
     try {
       const user = await login(email, password);
-      window.location.replace(homePathForRole(user.role));
+      window.location.replace(appHref(homePathForRole(user.role)));
     } catch (err) {
       setError(getErrorMessage(err, "Login failed. Email/password ya server check karo."));
     } finally {

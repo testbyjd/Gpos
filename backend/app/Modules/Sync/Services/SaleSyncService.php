@@ -101,9 +101,15 @@ class SaleSyncService
                     'amount' => $payment['amount'],
                     'tendered' => $payment['tendered'] ?? null,
                     'change_amount' => $payment['change'] ?? null,
+                    'reference_id' => isset($payment['reference_id'])
+                        ? (trim((string) $payment['reference_id']) ?: null)
+                        : null,
                 ]);
 
-                if ($payment['method'] === 'khata' && $sale->customer_id) {
+                if ($payment['method'] === 'khata') {
+                    if (! $sale->customer_id) {
+                        throw new RuntimeException('Khata / udhar ke liye customer select karna lazmi hai.');
+                    }
                     $customer = Customer::lockForUpdate()->find($sale->customer_id);
                     if ($customer) {
                         $customer->balance = bcadd((string) $customer->balance, (string) $payment['amount'], 2);

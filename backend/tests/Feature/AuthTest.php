@@ -70,14 +70,22 @@ class AuthTest extends TestCase
             ->assertStatus(403);
     }
 
-    public function test_cashier_cannot_pass_pin_override(): void
+    public function test_cashier_can_use_manager_override_pin(): void
     {
+        User::factory()->manager()->create([
+            'pin_hash' => Hash::make('4321'),
+        ]);
         $cashier = User::factory()->cashier()->create([
-            'pin_hash' => Hash::make('1234'),
+            'pin_hash' => Hash::make('9999'),
         ]);
 
         $this->actingAs($cashier)
-            ->postJson('/api/v1/auth/verify-pin', ['pin' => '1234'])
+            ->postJson('/api/v1/auth/verify-pin', ['pin' => '4321'])
+            ->assertOk()
+            ->assertJsonPath('ok', true);
+
+        $this->actingAs($cashier)
+            ->postJson('/api/v1/auth/verify-pin', ['pin' => '9999'])
             ->assertStatus(403);
     }
 }

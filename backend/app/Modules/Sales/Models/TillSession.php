@@ -9,7 +9,7 @@ class TillSession extends Model
     protected $fillable = [
         'store_id', 'register_name', 'opened_by', 'closed_by', 'opening_float',
         'expected_cash', 'counted_cash', 'retained_float', 'handed_over',
-        'variance', 'denominations', 'notes', 'opened_at', 'closed_at',
+        'variance', 'denominations', 'payment_totals', 'notes', 'opened_at', 'closed_at',
     ];
 
     protected function casts(): array
@@ -22,6 +22,7 @@ class TillSession extends Model
             'handed_over' => 'decimal:2',
             'variance' => 'decimal:2',
             'denominations' => 'array',
+            'payment_totals' => 'array',
             'opened_at' => 'datetime',
             'closed_at' => 'datetime',
         ];

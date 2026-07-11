@@ -23,6 +23,7 @@ import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { ConnectionStatus } from "@/features/pos/components/ConnectionStatus";
 import { TaskBell } from "@/features/tasks/components/TaskBell";
 import { getStoredUser, logout, type AuthUser } from "@/lib/auth";
+import { appHref } from "@/lib/app-path";
 
 type Role = AuthUser["role"];
 type NavItem = {
@@ -73,11 +74,11 @@ export function AdminShell({ title, eyebrow, actions, allowedRoles = ["owner", "
   useEffect(() => {
     const stored = getStoredUser();
     if (!stored) {
-      window.location.replace("/login");
+      window.location.replace(appHref("/login"));
       return;
     }
     if (!allowedRoles.includes(stored.role)) {
-      window.location.replace(stored.role === "cashier" ? "/" : "/dashboard");
+      window.location.replace(appHref(stored.role === "cashier" ? "/" : "/dashboard"));
       return;
     }
     setUser(stored);
@@ -86,7 +87,7 @@ export function AdminShell({ title, eyebrow, actions, allowedRoles = ["owner", "
 
   function signOut() {
     logout();
-    window.location.replace("/login");
+    window.location.replace(appHref("/login"));
   }
 
   if (!ready || !allowed) {

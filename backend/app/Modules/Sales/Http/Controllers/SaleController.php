@@ -20,6 +20,19 @@ class SaleController extends Controller
             })
             ->when($request->filled('from'), fn ($q) => $q->where('sold_at', '>=', $request->date('from')->startOfDay()))
             ->when($request->filled('to'), fn ($q) => $q->where('sold_at', '<=', $request->date('to')->endOfDay()))
+            ->when($request->filled('q'), function ($q) use ($request) {
+                $term = trim((string) $request->string('q'));
+                if ($term === '') {
+                    return;
+                }
+                $q->where(function ($inner) use ($term) {
+                    $inner->where('invoice_no', 'like', '%'.$term.'%')
+                        ->orWhereHas('customer', function ($c) use ($term) {
+                            $c->where('name', 'like', '%'.$term.'%')
+                                ->orWhere('phone', 'like', '%'.$term.'%');
+                        });
+                });
+            })
             ->latest('sold_at')
             ->paginate($request->integer('per_page', 50));
 

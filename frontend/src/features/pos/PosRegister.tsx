@@ -3,16 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppToast, useAppToast } from "@/components/ui/app-toast";
 import { useBillingConnection } from "@/lib/connection-status";
-import { cn } from "@/lib/utils";
-import { AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import { PosTopBar } from "./components/PosTopBar";
-import { CartSlideHandle } from "./components/CartSlideHandle";
-import { ProductSearch } from "./components/ProductSearch";
-import { SaleQuickAdd } from "./components/SaleQuickAdd";
-import { CategoryChips } from "./components/CategoryChips";
-import { ProductGrid } from "./components/ProductGrid";
-import { CartPanel } from "./components/CartPanel";
+import { PosToolbar } from "./components/PosToolbar";
+import { PosFooter } from "./components/PosFooter";
+import { BillingWorkspace } from "./components/BillingWorkspace";
+import { MeriShelf } from "./components/MeriShelf";
 import { PaymentModal } from "./components/PaymentModal";
+import { MorePayModal } from "./components/MorePayModal";
 import { SaleSuccessModal, type SaleResult } from "./components/SaleSuccessModal";
 import { fetchCatalog } from "./api/catalog";
 import {
@@ -23,15 +20,19 @@ import {
 } from "./api/barcode";
 import { fetchPosCustomers } from "./api/customers";
 import { submitSale } from "./api/sale";
-import { validateDiscountApproval } from "./discount";
+import { validateDiscountApproval, cartSubtotal, cartLineDiscountTotal, maxLineDiscount, freeLineDiscountCap, lineDiscountGate } from "./discount";
 import { formatSyncError, syncCartWithCatalog } from "./api/syncCartPrices";
 import { recordSync } from "@/lib/sync-status";
 import { getErrorMessage } from "@/lib/api";
+import { formatMoney } from "@/lib/utils";
 import type { CartLine, HeldCart, PaymentMethod, Product, PosCustomer } from "./types";
+import { DiscountPinModal } from "./components/DiscountPinModal";
+import { PosReturnModal } from "./components/PosReturnModal";
 
-const CATALOG_CACHE_KEY = "gpos.pos.catalog.v2";
+const CATALOG_CACHE_KEY = "gpos.pos.catalog.v3";
 const HELD_CARTS_KEY = "gpos.pos.heldCarts.v1";
 const PRODUCTS_PANEL_KEY = "gpos.pos.productsPanelOpen.v1";
+const SHELF_KEY = "gpos.pos.shelf.v1";
 
 function readProductsPanelOpen(): boolean {
   if (typeof window === "undefined") return false;
@@ -39,6 +40,18 @@ function readProductsPanelOpen(): boolean {
     return window.localStorage.getItem(PRODUCTS_PANEL_KEY) === "1";
   } catch {
     return false;
+  }
+}
+
+function readShelfIds(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(SHELF_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
   }
 }
 
@@ -58,9 +71,7 @@ export function PosRegister() {
   const [categories, setCategories] = useState<readonly string[]>(["All"]);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState(false);
-  const [catalogQuery, setCatalogQuery] = useState("");
   const [saleQuery, setSaleQuery] = useState("");
-  const [category, setCategory] = useState<string>("All");
   const [lines, setLines] = useState<CartLine[]>([]);
   const [customers, setCustomers] = useState<PosCustomer[]>([]);
   const [customer, setCustomer] = useState("Walk-in Customer");
@@ -73,28 +84,35 @@ export function PosRegister() {
   const { toast, showToast, hideToast } = useAppToast();
   const { connected: billingOnline } = useBillingConnection();
   const [payOpen, setPayOpen] = useState(false);
+  const [morePayOpen, setMorePayOpen] = useState(false);
   const [saleResult, setSaleResult] = useState<SaleResult | null>(null);
-  const [cartOpen, setCartOpen] = useState(false);
+  const [pendingLineDiscount, setPendingLineDiscount] = useState<{
+    id: string;
+    amount: number;
+    productName: string;
+    max: number;
+    freeCap: number;
+  } | null>(null);
+  const [returnOpen, setReturnOpen] = useState(false);
   const [productsOpen, setProductsOpen] = useState(readProductsPanelOpen);
+  const [shelfIds, setShelfIds] = useState<string[]>([]);
   const [isDesktop, setIsDesktop] = useState(false);
 
   const saleSearchRef = useRef<HTMLInputElement>(null);
-  const catalogSearchRef = useRef<HTMLInputElement>(null);
   // Stable id for the current checkout so a retry can't create a duplicate sale.
   const saleClientId = useRef<string | null>(null);
   const autoScanHandled = useRef<string>("");
 
-  const subtotal = lines.reduce((s, l) => s + l.product.price * l.qty, 0);
-  const total = Math.max(0, subtotal - discount);
+  const subtotal = cartSubtotal(lines);
+  const lineDiscountTotal = cartLineDiscountTotal(lines);
+  const billDiscount = Math.min(discount, Math.max(0, subtotal - lineDiscountTotal));
+  const totalDiscount = Math.round((lineDiscountTotal + billDiscount) * 100) / 100;
+  const total = Math.max(0, subtotal - totalDiscount);
 
-  const filteredCatalog = useMemo(() => {
-    const q = catalogQuery.trim().toLowerCase();
-    return products.filter((p) => {
-      const inCat = category === "All" || p.category === category;
-      const inQuery = !q || productMatchesQuery(p, q);
-      return inCat && inQuery;
-    });
-  }, [catalogQuery, category, products]);
+  useEffect(() => {
+    const maxBill = Math.max(0, subtotal - lineDiscountTotal);
+    if (discount > maxBill) setDiscount(maxBill);
+  }, [subtotal, lineDiscountTotal, discount]);
 
   const saleSearchResults = useMemo(() => {
     const q = saleQuery.trim();
@@ -109,12 +127,25 @@ export function PosRegister() {
     return products.filter((p) => productMatchesQuery(p, q)).slice(0, 20);
   }, [saleQuery, products]);
 
+  function toggleShelfId(id: string) {
+    setShelfIds((prev) => {
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      try {
+        window.localStorage.setItem(SHELF_KEY, JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }
+
   function addProduct(p: Product) {
     setLines((prev) => {
       const existing = prev.find((l) => l.product.id === p.id);
-      const step = p.fractional ? 0.5 : 1;
+      // kg: pehli add 0.200 (200g); dubara add pe +0.200. Baqi units: 1.
+      const step = p.fractional ? 0.2 : 1;
       if (existing) {
-        const updated = { ...existing, qty: existing.qty + step };
+        const updated = { ...existing, qty: Math.round((existing.qty + step) * 1000) / 1000 };
         return [updated, ...prev.filter((l) => l.product.id !== p.id)];
       }
       return [{ product: p, qty: step }, ...prev];
@@ -221,37 +252,6 @@ export function PosRegister() {
     setSaleQuery(code);
   }
 
-  async function scanCatalogBarcode(raw: string) {
-    const code = raw.trim();
-    if (!code) return;
-    if (catalogLoading || catalogError) {
-      showToast("Catalog load nahi hua — scan abhi nahi chalega.", "error");
-      return;
-    }
-    const product = await resolveBarcodeForPos(code);
-    if (!product) {
-      showToast(`Barcode "${code}" catalog mein nahi mila.`, "error");
-      setCatalogQuery("");
-      catalogSearchRef.current?.focus();
-      return;
-    }
-    addProduct(product);
-    setCatalogQuery("");
-    catalogSearchRef.current?.focus();
-  }
-
-  function changeQty(id: string, delta: number) {
-    setLines((prev) =>
-      prev
-        .map((l) =>
-          l.product.id === id
-            ? { ...l, qty: Math.round((l.qty + delta) * 1000) / 1000 }
-            : l,
-        )
-        .filter((l) => l.qty > 0),
-    );
-  }
-
   function setLineQty(id: string, qty: number) {
     const rounded = Math.round(qty * 1000) / 1000;
     if (rounded <= 0) {
@@ -259,8 +259,56 @@ export function PosRegister() {
       return;
     }
     setLines((prev) =>
-      prev.map((l) => (l.product.id === id ? { ...l, qty: rounded } : l)),
+      prev.map((l) => {
+        if (l.product.id !== id) return l;
+        const next = { ...l, qty: rounded };
+        const max = maxLineDiscount(next);
+        const disc = Math.min(max, Math.max(0, l.discount ?? 0));
+        return { ...next, discount: disc > 0 ? disc : undefined };
+      }),
     );
+  }
+
+  function applyLineDiscount(id: string, amount: number) {
+    const rounded = Math.max(0, Math.round(amount * 100) / 100);
+    setLines((prev) =>
+      prev.map((l) => {
+        if (l.product.id !== id) return l;
+        return { ...l, discount: rounded > 0 ? rounded : undefined };
+      }),
+    );
+  }
+
+  function setLineDiscount(id: string, amount: number) {
+    const line = lines.find((l) => l.product.id === id);
+    if (!line) return;
+    const max = maxLineDiscount(line);
+    const freeCap = freeLineDiscountCap(line);
+    const rounded = Math.max(0, Math.round(amount * 100) / 100);
+    const gate = lineDiscountGate(line, rounded);
+
+    if (gate === "over_max") {
+      showToast(
+        max > 0
+          ? `"${line.product.name}" pe max discount ${formatMoney(max)} hai — cost se neeche nahi ja sakta.`
+          : `"${line.product.name}" pe discount nahi — cost/margin allow nahi karti.`,
+        "error",
+      );
+      return;
+    }
+
+    if (gate === "needs_pin") {
+      setPendingLineDiscount({
+        id,
+        amount: rounded,
+        productName: line.product.name,
+        max,
+        freeCap,
+      });
+      return;
+    }
+
+    applyLineDiscount(id, rounded);
   }
 
   function removeLine(id: string) {
@@ -327,13 +375,12 @@ export function PosRegister() {
     if (lines.length === 0) return;
     const approvalError = validateDiscountApproval(
       subtotal,
-      discount,
+      totalDiscount,
       discountRecipientName,
       discountReason,
     );
     if (approvalError) {
       showToast(approvalError, "error");
-      setCartOpen(true);
       return;
     }
     if (!billingOnline) {
@@ -359,12 +406,75 @@ export function PosRegister() {
     setPayOpen(true);
   }
 
+  async function openMorePay() {
+    if (lines.length === 0) return;
+    const approvalError = validateDiscountApproval(
+      subtotal,
+      totalDiscount,
+      discountRecipientName,
+      discountReason,
+    );
+    if (approvalError) {
+      showToast(approvalError, "error");
+      return;
+    }
+    if (!billingOnline) {
+      showToast("Server se connection nahi — billing band. Online aane par dobara try karein.", "error");
+      return;
+    }
+    try {
+      const { lines: synced, priceChanges } = await syncCartWithCatalog(lines);
+      setLines(synced);
+      setProducts((prev) => {
+        const merged = new Map(prev.map((p) => [p.id, p]));
+        synced.forEach((l) => merged.set(l.product.id, l.product));
+        return Array.from(merged.values());
+      });
+      if (priceChanges.length > 0) {
+        showToast(`${priceChanges.length} item ki price server rate pe update ho gayi.`, "info");
+      }
+    } catch (err) {
+      showToast(formatSyncError(err), "error");
+      return;
+    }
+    saleClientId.current = crypto.randomUUID();
+    setMorePayOpen(true);
+  }
+
+  async function pickMorePayMethod(method: PaymentMethod, referenceId?: string) {
+    setMorePayOpen(false);
+    setPayment(method);
+    if (method === "cash") {
+      setPayOpen(true);
+      return;
+    }
+    try {
+      await confirmSale(total, 0, method, referenceId);
+    } catch {
+      /* confirmSale already toasts; keep cart for retry */
+    }
+  }
+
   // Online-only: the sale completes only when the server confirms it.
   // No internet => no bill (throws, cart stays, cashier retries).
-  async function confirmSale(tendered: number, change: number) {
+  async function confirmSale(
+    tendered: number,
+    change: number,
+    methodOverride?: PaymentMethod,
+    referenceId?: string,
+  ) {
     if (!billingOnline) {
       showToast("Server se connection nahi — bill save NAHI hoga. Online aane par try karein.", "error");
       throw new Error("sale-offline");
+    }
+    const payMethod = methodOverride ?? payment;
+    if (payMethod === "khata" && !customerId) {
+      showToast("Khata / udhar ke liye pehle customer select karo.", "error");
+      throw new Error("khata-no-customer");
+    }
+    if (payMethod !== "cash" && !referenceId?.trim()) {
+      showToast("Cash ke ilawa payment pe reference ID lazmi hai.", "error");
+      throw new Error("missing-reference");
     }
     let billLines = lines;
     try {
@@ -379,22 +489,26 @@ export function PosRegister() {
       throw new Error("sale-sync-failed");
     }
 
-    const billSubtotal = billLines.reduce((s, l) => s + l.product.price * l.qty, 0);
-    const billTotal = Math.max(0, billSubtotal - discount);
+    const billSubtotal = cartSubtotal(billLines);
+    const billLineDisc = cartLineDiscountTotal(billLines);
+    const billExtraDisc = Math.min(discount, Math.max(0, billSubtotal - billLineDisc));
+    const billDiscountTotal = Math.round((billLineDisc + billExtraDisc) * 100) / 100;
+    const billTotal = Math.max(0, billSubtotal - billDiscountTotal);
 
     let invoice: string;
     try {
       const res = await submitSale({
         clientId: saleClientId.current ?? crypto.randomUUID(),
         lines: billLines,
-        discount,
+        discount: billDiscountTotal,
         discountRecipientName,
         discountReason,
         total: billTotal,
-        method: payment,
+        method: payMethod,
         tendered,
         change,
         customerId,
+        referenceId: referenceId?.trim() || undefined,
       });
       invoice = res.invoiceNo;
     } catch (err) {
@@ -405,13 +519,15 @@ export function PosRegister() {
     recordSync();
 
     setPayOpen(false);
+    setMorePayOpen(false);
     setSaleResult({
       invoice,
       total: billTotal,
       tendered,
       change,
-      method: payment,
+      method: payMethod,
       customer,
+      referenceId: referenceId?.trim() || undefined,
     });
     resetSale();
   }
@@ -431,24 +547,26 @@ export function PosRegister() {
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (payOpen || saleResult) return; // an open modal owns the keyboard
+      if (payOpen || morePayOpen || saleResult || pendingLineDiscount || returnOpen) return;
       if (e.key === "F2") {
         e.preventDefault();
-        if (!isDesktop) setCartOpen(true);
         saleSearchRef.current?.focus();
         saleSearchRef.current?.select();
       } else if (e.key === "F4") {
         e.preventDefault();
         holdCart();
+      } else if (e.key === "F6") {
+        e.preventDefault();
+        setReturnOpen(true);
       } else if (e.key === "F9") {
         e.preventDefault();
-        checkout();
+        void checkout();
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lines, discount, customer, heldCarts, payOpen, saleResult, isDesktop]);
+  }, [lines, discount, customer, heldCarts, payOpen, morePayOpen, saleResult, pendingLineDiscount, returnOpen, isDesktop]);
 
   useEffect(() => {
     const q = saleQuery.trim();
@@ -480,6 +598,7 @@ export function PosRegister() {
   }, [productsOpen]);
 
   useEffect(() => {
+    setShelfIds(readShelfIds());
     try {
       const raw = window.localStorage.getItem(HELD_CARTS_KEY);
       if (raw) setHeldCarts(JSON.parse(raw) as HeldCart[]);
@@ -516,20 +635,15 @@ export function PosRegister() {
         setCatalogError(false);
         window.localStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify(catalog));
         setCatalogLoading(false);
-        if (!catalog.categories.includes(category)) setCategory("All");
       })
       .catch(() => {
         if (!alive || hadCachedCatalog) return;
-        // Backend down and no cached catalog yet — show a clear empty state
-        // instead of fake products (never let cashiers sell items that
-        // don't exist in the real inventory).
         setCatalogError(true);
         setCatalogLoading(false);
       });
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Khata customers for the cart selector (best-effort — POS still bills without it).
@@ -543,177 +657,119 @@ export function PosRegister() {
     };
   }, []);
 
-  const catalogBody = catalogLoading ? (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-1.5">
-      {Array.from({ length: 12 }).map((_, i) => (
-        <div
-          key={i}
-          className="flex animate-pulse items-stretch gap-2 rounded-lg border border-border/80 bg-card p-1.5"
-        >
-          <div className="h-[4.25rem] w-[4.25rem] shrink-0 rounded-md bg-muted" />
-          <div className="flex flex-1 flex-col justify-between py-0.5">
-            <div className="space-y-2">
-              <div className="h-4 w-full rounded bg-muted" />
-              <div className="h-3 w-16 rounded-full bg-muted" />
-            </div>
-            <div className="h-4 w-20 rounded bg-muted" />
-          </div>
-        </div>
-      ))}
-    </div>
-  ) : catalogError ? (
-    <div className="flex flex-1 flex-col items-center justify-center gap-2 py-16 text-center text-muted-foreground">
-      <AlertTriangle className="h-10 w-10 opacity-30" />
-      <p className="text-sm font-semibold text-foreground">Catalog load nahi hua</p>
-      <p className="max-w-xs text-xs">
-        Internet aur server dono chahiye. Jab online ho jayein tab products load honge —
-        tab hi billing chalegi (offline bill save nahi hota).
-      </p>
-    </div>
-  ) : (
-    <ProductGrid products={filteredCatalog} onAdd={addProduct} />
-  );
+  function startKhataCheckout() {
+    if (!customerId) {
+      showToast("Khata / udhar ke liye pehle customer select karo.", "error");
+      return;
+    }
+    setPayment("khata");
+    void checkout();
+  }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-background">
+    <div className="flex h-screen flex-col overflow-hidden bg-[#f3f4f6] dark:bg-background">
       <PosTopBar />
+      <PosToolbar
+        shelfOpen={productsOpen}
+        onToggleShelf={() => setProductsOpen((v) => !v)}
+        onReturn={() => setReturnOpen(true)}
+      />
 
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        {/* Desktop: products band — sirf Open tab */}
-        {!productsOpen && (
-          <button
-            type="button"
-            onClick={() => setProductsOpen(true)}
-            aria-label="Products kholo"
-            className="hidden lg:flex w-11 shrink-0 flex-col items-center justify-center gap-2 border-r border-border/70 bg-card text-primary transition-colors hover:bg-card-hover"
-          >
-            <ChevronRight className="h-5 w-5" />
-            <span className="text-[11px] font-black uppercase tracking-wide [writing-mode:vertical-rl] rotate-180">
-              Open
-            </span>
-          </button>
-        )}
-
-        {/* Products — mobile full width; desktop sidebar jab open ho */}
-        <section
-          className={cn(
-            "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-r border-border/70 p-3 lg:p-3.5",
-            productsOpen ? "lg:flex-[3] lg:basis-0 lg:max-w-[30%] lg:flex-none" : "lg:hidden",
-          )}
-        >
-          <div className="mb-2.5 hidden items-center justify-between gap-2 lg:flex">
-            <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Products</p>
-            <button
-              type="button"
-              onClick={() => setProductsOpen(false)}
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-border/80 bg-card px-2 text-xs font-bold text-muted-foreground hover:bg-card-hover hover:text-foreground"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Band
-            </button>
-          </div>
-          {(isDesktop ? productsOpen : !cartOpen) && (
-            <div className="mb-2.5">
-              <ProductSearch
-                value={catalogQuery}
-                onValueChange={setCatalogQuery}
-                onScan={scanCatalogBarcode}
-                inputRef={catalogSearchRef}
-                resultCount={filteredCatalog.length}
-                placeholder="Products list filter — naam ya barcode…"
-              />
-            </div>
-          )}
-          <div>
-            <CategoryChips
-              categories={categories}
-              active={category}
-              onSelect={setCategory}
-            />
-          </div>
-          <div className="mt-2.5 flex-1 overflow-y-auto pr-1">{catalogBody}</div>
-        </section>
-
-        {/* Backdrop when cart open on mobile */}
-        {cartOpen && (
-          <button
-            type="button"
-            aria-label="Cart band karo"
-            className="fixed inset-0 z-40 bg-black/40 lg:hidden"
-            onClick={() => setCartOpen(false)}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <BillingWorkspace
+            lines={lines}
+            customers={customers}
+            customerId={customerId}
+            onCustomerChange={selectCustomer}
+            saleQuery={saleQuery}
+            onSaleQueryChange={setSaleQuery}
+            onSaleSubmit={submitSaleSearch}
+            saleResults={saleSearchResults}
+            onPickSale={pickSaleProduct}
+            saleInputRef={saleSearchRef}
+            searchDisabled={catalogLoading || catalogError}
+            discount={discount}
+            onDiscountChange={setDiscount}
+            discountRecipientName={discountRecipientName}
+            onDiscountRecipientNameChange={setDiscountRecipientName}
+            discountReason={discountReason}
+            onDiscountReasonChange={setDiscountReason}
+            onSetQty={setLineQty}
+            onSetLineDiscount={setLineDiscount}
+            onRemove={removeLine}
+            onClear={resetSale}
+            onHold={holdCart}
+            onCheckout={() => {
+              setPayment("cash");
+              void checkout();
+            }}
+            onMorePay={() => {
+              void openMorePay();
+            }}
+            onKhata={startKhataCheckout}
+            heldCarts={heldCarts}
+            onResume={resumeCart}
           />
-        )}
-
-        {/* Current Sale — search upar (fixed), cart neeche */}
-        <div
-          className={cn(
-            "fixed inset-y-0 right-0 z-50 flex h-full w-[min(100%,420px)] min-w-0 flex-col overflow-hidden border-l border-border/70 bg-background shadow-xl transition-[transform,flex] duration-300 ease-out lg:relative lg:z-auto lg:min-w-0 lg:translate-x-0 lg:shadow-none",
-            productsOpen ? "lg:flex-[7] lg:basis-0" : "lg:flex-1",
-            cartOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0",
-          )}
-        >
-          <div className="shrink-0 border-b border-border/70 p-3 lg:p-3.5 lg:pb-3">
-            {(isDesktop || cartOpen) && (
-              <SaleQuickAdd
-                value={saleQuery}
-                onValueChange={setSaleQuery}
-                onSubmit={submitSaleSearch}
-                results={saleSearchResults}
-                onPick={pickSaleProduct}
-                inputRef={saleSearchRef}
-                disabled={catalogLoading || catalogError}
-              />
-            )}
-          </div>
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <CartPanel
-              lines={lines}
-              customers={customers}
-              customerId={customerId}
-              onCustomerChange={selectCustomer}
-              discount={discount}
-              onDiscountChange={setDiscount}
-              discountRecipientName={discountRecipientName}
-              onDiscountRecipientNameChange={setDiscountRecipientName}
-              discountReason={discountReason}
-              onDiscountReasonChange={setDiscountReason}
-              payment={payment}
-              onPaymentChange={setPayment}
-              onQty={changeQty}
-              onSetQty={setLineQty}
-              onRemove={removeLine}
-              onClear={resetSale}
-              onHold={holdCart}
-              onCheckout={checkout}
-              heldCarts={heldCarts}
-              onResume={resumeCart}
-            />
-          </div>
         </div>
 
-        <CartSlideHandle
-          open={cartOpen}
-          itemCount={lines.length}
-          total={total}
-          onToggle={() => setCartOpen((v) => !v)}
+        <MeriShelf
+          open={isDesktop ? productsOpen : false}
+          onToggle={() => setProductsOpen((v) => !v)}
+          products={products}
+          shelfIds={shelfIds}
+          onToggleShelf={toggleShelfId}
+          onAdd={addProduct}
         />
       </div>
 
-      {/* Payment calculator */}
+      <PosFooter />
+
+      {morePayOpen && (
+        <MorePayModal
+          total={total}
+          onPick={(method, referenceId) => {
+            void pickMorePayMethod(method, referenceId);
+          }}
+          onClose={() => setMorePayOpen(false)}
+        />
+      )}
+
+      {returnOpen && (
+        <PosReturnModal
+          onClose={() => setReturnOpen(false)}
+          onReturned={() => {
+            showToast("Customer return record ho gaya — stock wapas aa gaya.", "success");
+          }}
+        />
+      )}
+
+      {pendingLineDiscount && (
+        <DiscountPinModal
+          productName={pendingLineDiscount.productName}
+          amount={pendingLineDiscount.amount}
+          maxDiscount={pendingLineDiscount.max}
+          freeCap={pendingLineDiscount.freeCap}
+          onApproved={() => {
+            applyLineDiscount(pendingLineDiscount.id, pendingLineDiscount.amount);
+            setPendingLineDiscount(null);
+            showToast("Discount PIN se approve ho gaya.", "success");
+          }}
+          onClose={() => setPendingLineDiscount(null)}
+        />
+      )}
+
       {payOpen && (
         <PaymentModal
           total={total}
           payment={payment}
           customer={customer}
-          onConfirm={confirmSale}
+          onConfirm={(tendered, change, referenceId) => confirmSale(tendered, change, payment, referenceId)}
           onClose={() => setPayOpen(false)}
         />
       )}
 
-      {/* Change / receipt confirmation — stays open until cashier dismisses */}
-      {saleResult && (
-        <SaleSuccessModal sale={saleResult} onClose={startNewSale} />
-      )}
+      {saleResult && <SaleSuccessModal sale={saleResult} onClose={startNewSale} />}
 
       <AppToast toast={toast} onDismiss={hideToast} />
     </div>

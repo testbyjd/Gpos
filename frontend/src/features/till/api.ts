@@ -15,6 +15,7 @@ export interface TillSummary {
   wallet_total: number;
   khata_total: number;
   sales_count: number;
+  payment_breakdown?: Array<{ method: string; amount: number }>;
   opening_float?: number;
   cash_sales?: number;
   expected_cash?: number;
@@ -30,6 +31,12 @@ export interface CloseTillPayload {
   retained_float: number;
   denominations?: Record<string, number>;
   notes?: string;
+  payment_settlements?: Array<{
+    method: string;
+    expected: number;
+    settled: number;
+    confirmed: boolean;
+  }>;
 }
 
 /** Reconciled session returned by POST /api/v1/till/close (decimals as strings). */
@@ -40,6 +47,14 @@ export interface ClosedTill {
   retained_float: string;
   handed_over: string;
   variance: string;
+  payment_totals?: Array<{
+    method: string;
+    amount?: number;
+    expected?: number;
+    settled?: number;
+    variance?: number;
+    confirmed?: boolean;
+  }> | null;
 }
 
 export async function closeTill(payload: CloseTillPayload): Promise<ClosedTill> {

@@ -20,14 +20,16 @@ class ReportController extends Controller
         $sales = Sale::with(['customer', 'payments'])->where('sold_at', '>=', $today)->latest('sold_at')->get();
         $cash = (float) SalePayment::where('method', 'cash')->whereHas('sale', fn ($q) => $q->where('sold_at', '>=', $today))->sum('amount');
         $card = (float) SalePayment::where('method', 'card')->whereHas('sale', fn ($q) => $q->where('sold_at', '>=', $today))->sum('amount');
-        $wallet = (float) SalePayment::where('method', 'wallet')->whereHas('sale', fn ($q) => $q->where('sold_at', '>=', $today))->sum('amount');
+        $digital = (float) SalePayment::whereIn('method', ['easypaisa', 'jazzcash', 'bank_transfer'])
+            ->whereHas('sale', fn ($q) => $q->where('sold_at', '>=', $today))
+            ->sum('amount');
         $khata = (float) SalePayment::where('method', 'khata')->whereHas('sale', fn ($q) => $q->where('sold_at', '>=', $today))->sum('amount');
 
         return response()->json([
             'metrics' => [
                 'net_sales' => (float) $sales->sum('total'),
                 'cash_in_till' => $cash,
-                'card_wallet' => $card + $wallet,
+                'card_wallet' => $card + $digital,
                 'khata_extended' => $khata,
             ],
             'sales_today' => $sales->map(fn (Sale $sale) => [

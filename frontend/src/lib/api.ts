@@ -1,4 +1,5 @@
 import { logout } from "./auth";
+import { appHref, isAppPath } from "./app-path";
 
 const DEFAULT_API_BASE = "http://localhost:8000/api/v1";
 
@@ -85,8 +86,8 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     const body = await res.text();
     if (res.status === 401 && typeof window !== "undefined") {
       logout();
-      if (!window.location.pathname.startsWith("/login")) {
-        window.location.href = "/login?expired=1";
+      if (!isAppPath(window.location.pathname, "/login")) {
+        window.location.href = appHref("/login?expired=1");
       }
     }
     throw new ApiError(res.status, parseErrorBody(res.status, body));
@@ -112,8 +113,8 @@ export async function apiUpload<T>(path: string, formData: FormData, method = "P
     const body = await res.text();
     if (res.status === 401 && typeof window !== "undefined") {
       logout();
-      if (!window.location.pathname.startsWith("/login")) {
-        window.location.href = "/login?expired=1";
+      if (!isAppPath(window.location.pathname, "/login")) {
+        window.location.href = appHref("/login?expired=1");
       }
     }
     throw new ApiError(res.status, parseErrorBody(res.status, body));

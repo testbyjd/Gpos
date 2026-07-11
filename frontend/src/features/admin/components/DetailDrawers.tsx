@@ -10,6 +10,7 @@ import { formatMoney, formatSignedBalance } from "@/lib/utils";
 import { formatPkDateTime } from "@/lib/datetime";
 import { DataTable, StatusPill } from "@/features/admin/components/AdminShell";
 import { SaleReceiptPrint } from "@/features/sales/components/SaleReceiptPrint";
+import { paymentMethodLabel } from "@/features/pos/paymentMethods";
 import {
   createPurchaseReturn,
   createSaleReturn,
@@ -389,11 +390,12 @@ export function SaleDetailModal({
                 <SectionTitle>Payments</SectionTitle>
                 <DataTable
                   minWidth="320px"
-                  columns={["Method", "Amount"]}
+                  columns={["Method", "Amount", "Reference"]}
                   emptyLabel="Koi payment record nahi."
                   rows={(sale.payments ?? []).map((p) => [
-                    <span key="m" className="font-semibold capitalize text-foreground">{p.method}</span>,
+                    <span key="m" className="font-semibold text-foreground">{paymentMethodLabel(p.method)}</span>,
                     <span key="a" className="font-bold tabular-nums text-foreground">{formatMoney(Number(p.amount))}</span>,
+                    <span key="r" className="font-semibold text-muted-foreground">{p.reference_id || "—"}</span>,
                   ])}
                 />
               </>

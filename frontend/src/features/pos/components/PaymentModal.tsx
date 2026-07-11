@@ -1,18 +1,30 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Banknote, CreditCard, Delete, NotebookPen, QrCode, SplitSquareHorizontal, X } from "lucide-react";
+import {
+  Banknote,
+  Building2,
+  CreditCard,
+  Delete,
+  NotebookPen,
+  Smartphone,
+  SplitSquareHorizontal,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn, formatMoney } from "@/lib/utils";
 import { useModalDismiss } from "@/lib/hooks/useModalDismiss";
+import { PAYMENT_METHOD_LABEL, requiresPaymentReference } from "../paymentMethods";
 import type { PaymentMethod } from "../types";
 
-const METHOD_META: Record<PaymentMethod, { label: string; icon: typeof Banknote }> = {
-  cash: { label: "Cash", icon: Banknote },
-  card: { label: "Card", icon: CreditCard },
-  wallet: { label: "Wallet / QR", icon: QrCode },
-  khata: { label: "Khata", icon: NotebookPen },
-  split: { label: "Split", icon: SplitSquareHorizontal },
+const METHOD_ICON: Record<PaymentMethod, typeof Banknote> = {
+  cash: Banknote,
+  card: CreditCard,
+  easypaisa: Smartphone,
+  jazzcash: Smartphone,
+  bank_transfer: Building2,
+  khata: NotebookPen,
+  split: SplitSquareHorizontal,
 };
 
 const QUICK_NOTES = [100, 500, 1000, 5000];
@@ -22,7 +34,7 @@ interface Props {
   total: number;
   payment: PaymentMethod;
   customer: string;
-  onConfirm: (tendered: number, change: number) => Promise<void> | void;
+  onConfirm: (tendered: number, change: number, referenceId?: string) => Promise<void> | void;
   onClose: () => void;
 }
 
@@ -30,13 +42,17 @@ export function PaymentModal({ total, payment, customer, onConfirm, onClose }: P
   useModalDismiss(onClose, { escape: false });
 
   const isCash = payment === "cash";
+  const needsRef = requiresPaymentReference(payment);
   const [tendered, setTendered] = useState("");
+  const [referenceId, setReferenceId] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
   const tenderedNum = parseFloat(tendered) || 0;
   const change = tenderedNum - total;
   const enough = !isCash || tenderedNum >= total;
-  const { label, icon: Icon } = METHOD_META[payment];
+  const label = PAYMENT_METHOD_LABEL[payment];
+  const Icon = METHOD_ICON[payment];
 
   function push(key: string) {
     setTendered((prev) => {
@@ -48,17 +64,32 @@ export function PaymentModal({ total, payment, customer, onConfirm, onClose }: P
 
   async function confirm() {
     if (!enough || submitting) return;
+    if (needsRef && !referenceId.trim()) {
+      setError("Reference ID lazmi hai.");
+      return;
+    }
+    setError("");
     setSubmitting(true);
     try {
-      await onConfirm(tenderedNum, isCash ? Math.max(0, change) : 0);
-      // success: the parent closes (unmounts) this modal
+      await onConfirm(
+        tenderedNum,
+        isCash ? Math.max(0, change) : 0,
+        needsRef ? referenceId.trim() : undefined,
+      );
     } catch {
-      setSubmitting(false); // failed (e.g. offline): keep modal open for retry
+      setSubmitting(false);
     }
   }
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      if (needsRef && document.activeElement?.tagName === "INPUT") {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          void confirm();
+        }
+        return;
+      }
       if (/^[0-9]$/.test(e.key)) {
         e.preventDefault();
         push(e.key);
@@ -70,13 +101,13 @@ export function PaymentModal({ total, payment, customer, onConfirm, onClose }: P
         setTendered((p) => p.slice(0, -1));
       } else if (e.key === "Enter") {
         e.preventDefault();
-        confirm();
+        void confirm();
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tendered, enough, tenderedNum, submitting]);
+  }, [tendered, enough, tenderedNum, submitting, referenceId, needsRef]);
 
   return (
     <div
@@ -99,6 +130,7 @@ export function PaymentModal({ total, payment, customer, onConfirm, onClose }: P
             </h2>
           </div>
           <button
+            type="button"
             onClick={onClose}
             aria-label="Close payment"
             className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-card-hover hover:text-foreground"
@@ -108,7 +140,6 @@ export function PaymentModal({ total, payment, customer, onConfirm, onClose }: P
         </div>
 
         <div className="p-5">
-          {/* Totals */}
           <div className="rounded-lg border border-border/80 bg-card p-4">
             <div className="flex items-baseline justify-between">
               <span className="text-sm font-semibold text-muted-foreground">Total due</span>
@@ -141,21 +172,47 @@ export function PaymentModal({ total, payment, customer, onConfirm, onClose }: P
               </>
             ) : payment === "khata" ? (
               <p className="mt-3 border-t border-border/70 pt-3 text-sm text-muted-foreground">
-                This amount will be added to{" "}
-                <span className="font-bold text-foreground">{customer}</span>&apos;s Khata balance.
+                Yeh amount{" "}
+                <span className="font-bold text-foreground">{customer}</span>
+                {" "}ke Khata pe add hoga.
               </p>
             ) : (
               <p className="mt-3 border-t border-border/70 pt-3 text-sm text-muted-foreground">
-                Confirm once the {label.toLowerCase()} transaction is approved on the terminal.
+                Confirm once the {label.toLowerCase()} transaction is approved.
               </p>
             )}
           </div>
 
-          {/* Cash keypad + quick notes */}
+          {needsRef && (
+            <label className="mt-4 block space-y-1.5">
+              <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                Reference ID <span className="text-danger">*</span>
+              </span>
+              <input
+                type="text"
+                value={referenceId}
+                onChange={(e) => {
+                  setReferenceId(e.target.value);
+                  setError("");
+                }}
+                placeholder={
+                  payment === "khata"
+                    ? "Note / slip / agreement no…"
+                    : "Txn ID / TID / slip no…"
+                }
+                className="h-11 w-full rounded-lg border border-border bg-input px-3 text-sm font-semibold outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
+                autoFocus
+              />
+            </label>
+          )}
+
+          {error && <p className="mt-2 text-xs font-bold text-danger">{error}</p>}
+
           {isCash && (
             <>
               <div className="mt-4 grid grid-cols-4 gap-2">
                 <button
+                  type="button"
                   onClick={() => setTendered(total.toString())}
                   className="rounded-md border border-primary/40 bg-primary/10 py-2 text-sm font-bold text-primary transition-colors hover:bg-primary/20"
                 >
@@ -164,6 +221,7 @@ export function PaymentModal({ total, payment, customer, onConfirm, onClose }: P
                 {QUICK_NOTES.map((n) => (
                   <button
                     key={n}
+                    type="button"
                     onClick={() => setTendered((p) => ((parseFloat(p) || 0) + n).toString())}
                     className="rounded-md border border-border bg-card py-2 text-sm font-bold text-foreground transition-colors hover:bg-card-hover"
                   >
@@ -176,6 +234,7 @@ export function PaymentModal({ total, payment, customer, onConfirm, onClose }: P
                 {KEYS.map((k) => (
                   <button
                     key={k}
+                    type="button"
                     onClick={() => push(k)}
                     className="h-12 rounded-md border border-border bg-card text-lg font-bold text-foreground transition-colors hover:bg-card-hover active:scale-[0.97]"
                   >
@@ -183,6 +242,7 @@ export function PaymentModal({ total, payment, customer, onConfirm, onClose }: P
                   </button>
                 ))}
                 <button
+                  type="button"
                   onClick={() => setTendered((p) => p.slice(0, -1))}
                   aria-label="Backspace"
                   className="col-span-3 flex h-11 items-center justify-center gap-2 rounded-md border border-border bg-card text-sm font-bold text-muted-foreground transition-colors hover:bg-danger/10 hover:text-danger"
@@ -194,7 +254,6 @@ export function PaymentModal({ total, payment, customer, onConfirm, onClose }: P
             </>
           )}
 
-          {/* Actions */}
           <div className="mt-4 grid grid-cols-3 gap-2">
             <Button variant="secondary" size="lg" onClick={onClose} disabled={submitting}>
               Cancel
@@ -203,7 +262,7 @@ export function PaymentModal({ total, payment, customer, onConfirm, onClose }: P
               size="lg"
               className="col-span-2"
               disabled={!enough || submitting}
-              onClick={confirm}
+              onClick={() => void confirm()}
             >
               {submitting
                 ? "Saving…"

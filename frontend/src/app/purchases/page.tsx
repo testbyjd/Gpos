@@ -38,6 +38,7 @@ function PurchasesPageContent() {
   const [purchases, setPurchases] = useState<PurchaseRow[]>([]);
   const [selected, setSelected] = useState<PurchaseRow | null>(null);
   const [search, setSearch] = useState("");
+  const [productSearch, setProductSearch] = useState("");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const { toast, showToast, hideToast } = useAppToast();
@@ -71,8 +72,16 @@ function PurchasesPageContent() {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
-    return purchases.filter((p) => !q || [p.grn_no, p.vendor?.name ?? ""].some((x) => x.toLowerCase().includes(q)));
-  }, [purchases, search]);
+    const pq = productSearch.toLowerCase().trim();
+    return purchases.filter((p) => {
+      const matchGrnVendor =
+        !q || [p.grn_no, p.vendor?.name ?? ""].some((x) => x.toLowerCase().includes(q));
+      const matchProduct =
+        !pq ||
+        p.lines.some((line) => (line.product?.name ?? "").toLowerCase().includes(pq));
+      return matchGrnVendor && matchProduct;
+    });
+  }, [purchases, search, productSearch]);
   const total = purchases.reduce((sum, p) => sum + Number(p.subtotal), 0);
   const latestId = filtered[0]?.id;
 
@@ -101,7 +110,40 @@ function PurchasesPageContent() {
       ) : (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
           <PagePanel>
-            <PanelHeader title="Purchase register" meta={`${filtered.length} GRNs from backend`} actions={<SearchInput label="Search GRN or vendor" value={search} onChange={(e) => setSearch(e.target.value)} className="w-60" containerClassName="hidden sm:block" />} />
+            <PanelHeader
+              title="Purchase register"
+              meta={`${filtered.length} GRNs from backend`}
+              actions={
+                <div className="hidden items-center gap-2 sm:flex">
+                  <SearchInput
+                    label="Search GRN or vendor"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="w-52"
+                  />
+                  <SearchInput
+                    label="Search product in GRN"
+                    value={productSearch}
+                    onChange={(e) => setProductSearch(e.target.value)}
+                    className="w-52"
+                  />
+                </div>
+              }
+            />
+            <div className="flex flex-col gap-2 border-b border-border/80 px-4 py-3 sm:hidden">
+              <SearchInput
+                label="Search GRN or vendor"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full"
+              />
+              <SearchInput
+                label="Search product in GRN"
+                value={productSearch}
+                onChange={(e) => setProductSearch(e.target.value)}
+                className="w-full"
+              />
+            </div>
             <DataTable
               columns={["GRN", "Date", "Vendor", "Lines", "Amount", "Balance", "State"]}
               minWidth="720px"

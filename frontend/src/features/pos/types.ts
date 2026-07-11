@@ -7,6 +7,8 @@ export interface Product {
   /** barcode/SKU is optional for loose/unbarcoded items */
   barcode?: string;
   price: number;
+  /** Average / unit cost — line discount cannot go below this. */
+  cost: number;
   unit: UnitType;
   /** true for loose goods sold in fractional units (sugar, pulses, flour) */
   fractional: boolean;
@@ -18,9 +20,18 @@ export interface Product {
 export interface CartLine {
   product: Product;
   qty: number;
+  /** Rupees off this line (capped at margin: (price − cost) × qty). */
+  discount?: number;
 }
 
-export type PaymentMethod = "cash" | "card" | "wallet" | "khata" | "split";
+export type PaymentMethod =
+  | "cash"
+  | "card"
+  | "easypaisa"
+  | "jazzcash"
+  | "bank_transfer"
+  | "khata"
+  | "split";
 
 export interface PosCustomer {
   id: number;

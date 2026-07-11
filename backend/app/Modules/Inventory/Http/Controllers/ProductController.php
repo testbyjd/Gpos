@@ -8,6 +8,7 @@ use App\Modules\Inventory\Support\ProductBarcode;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -19,6 +20,17 @@ class ProductController extends Controller
 
         $query = Product::query()
             ->with('category')
+            ->select('products.*')
+            ->addSelect([
+                'last_vendor_name' => DB::table('purchase_lines as pl')
+                    ->select('v.name')
+                    ->join('purchases as pu', 'pu.id', '=', 'pl.purchase_id')
+                    ->join('vendors as v', 'v.id', '=', 'pu.vendor_id')
+                    ->whereColumn('pl.product_id', 'products.id')
+                    ->orderByDesc('pu.received_at')
+                    ->orderByDesc('pu.id')
+                    ->limit(1),
+            ])
             ->when($request->query('active', '1') !== 'all', fn ($builder) => $builder->where('is_active', true))
             ->when($q !== '', function ($builder) use ($q) {
                 $builder->where(function ($inner) use ($q) {
@@ -208,6 +220,13 @@ class ProductController extends Controller
         }
         if (array_key_exists('sku', $data)) {
             $data['sku'] = trim((string) ($data['sku'] ?? '')) ?: null;
+        }
+
+        $unit = strtolower((string) ($data['unit'] ?? $product?->unit ?? ''));
+        if ($unit === 'kg') {
+            $data['unit_precision'] = 3;
+        } elseif (array_key_exists('unit', $data) && ! array_key_exists('unit_precision', $data)) {
+            $data['unit_precision'] = 0;
         }
 
         return $data;

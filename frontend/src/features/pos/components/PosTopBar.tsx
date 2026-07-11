@@ -2,20 +2,32 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Banknote, LayoutDashboard, LogOut, Store } from "lucide-react";
+import {
+  Banknote,
+  ClipboardList,
+  LayoutDashboard,
+  LogOut,
+  Moon,
+  Store,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
-import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { useTheme } from "next-themes";
 import { getStoredUser, logout } from "@/lib/auth";
 import { TaskBell } from "@/features/tasks/components/TaskBell";
 import { CashCountModal } from "@/features/till/CashCountModal";
 import { Clock } from "./Clock";
 import { ConnectionStatus } from "./ConnectionStatus";
 
+const navBtn =
+  "inline-flex h-9 items-center gap-1.5 rounded-lg border border-border/80 bg-card px-3 text-sm font-semibold text-muted-foreground transition-colors hover:bg-card-hover hover:text-foreground";
+
 export function PosTopBar() {
   const router = useRouter();
   const user = getStoredUser();
   const isCashier = user?.role === "cashier";
   const [showCount, setShowCount] = useState(false);
+  const { resolvedTheme, setTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
 
   function signOut() {
     logout();
@@ -23,56 +35,61 @@ export function PosTopBar() {
   }
 
   return (
-    <header className="relative z-40 flex h-14 shrink-0 items-center justify-between border-b border-border/80 bg-surface/95 px-4 shadow-sm backdrop-blur">
-      <div className="flex items-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm shadow-primary/25">
+    <header className="relative z-40 flex h-[3.25rem] shrink-0 items-center justify-between gap-3 border-b border-border/80 bg-white px-3 dark:bg-surface sm:px-4">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white shadow-sm">
           <Store className="h-5 w-5" />
         </div>
-        <div className="leading-tight">
-          <h1 className="text-base font-bold text-foreground">Gondal Traders</h1>
-          <p className="text-xs text-muted-foreground">POS Register #1</p>
+        <div className="min-w-0 leading-tight">
+          <h1 className="truncate text-sm font-black text-foreground sm:text-base">
+            Gondal Traders Wholesale
+          </h1>
+          <p className="text-[11px] font-medium text-muted-foreground">Register 402D</p>
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
-        <TaskBell />
+      <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5 sm:gap-2">
+        <div className="hidden items-center gap-1.5 md:flex">
+          <TaskBell />
+          <Link href="/reports" className={navBtn}>
+            <ClipboardList className="h-4 w-4" />
+            Summary
+          </Link>
+          <button type="button" onClick={() => setShowCount(true)} className={navBtn}>
+            <Banknote className="h-4 w-4" />
+            Count cash
+          </button>
+          {isCashier ? (
+            <button type="button" onClick={signOut} className={navBtn}>
+              <LogOut className="h-4 w-4" />
+              Sign out
+            </button>
+          ) : (
+            <Link href="/dashboard" className={navBtn}>
+              <LayoutDashboard className="h-4 w-4" />
+              Admin
+            </Link>
+          )}
+        </div>
+
+        <ConnectionStatus />
+        <div className="hidden h-7 w-px bg-border sm:block" />
+        <div className="hidden sm:block">
+          <Clock />
+        </div>
+        <div className="hidden leading-tight text-right lg:block">
+          <div className="text-xs font-bold capitalize text-foreground">{user?.role ?? "cashier"}</div>
+          <div className="text-[11px] text-muted-foreground">{user?.name ?? "Guest"}</div>
+        </div>
         <button
           type="button"
-          onClick={() => setShowCount(true)}
-          className="flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:bg-card-hover hover:text-foreground"
+          onClick={() => setTheme(isDark ? "light" : "dark")}
+          className={navBtn}
+          aria-label="Toggle dark mode"
         >
-          <Banknote className="h-4 w-4" />
-          <span className="hidden sm:inline">Count cash</span>
+          <Moon className="h-4 w-4" />
+          <span className="hidden sm:inline">Black</span>
         </button>
-        {isCashier ? (
-          <button
-            type="button"
-            onClick={signOut}
-            className="hidden h-9 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-semibold text-muted-foreground transition-colors hover:bg-card-hover hover:text-foreground lg:flex"
-          >
-            <LogOut className="h-4 w-4" />
-            Sign out
-          </button>
-        ) : (
-          <Link
-            href="/dashboard"
-            className="hidden h-9 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-semibold text-muted-foreground transition-colors hover:bg-card-hover hover:text-foreground lg:flex"
-          >
-            <LayoutDashboard className="h-4 w-4" />
-            Admin
-          </Link>
-        )}
-        <ConnectionStatus />
-        <div className="hidden items-center gap-3 sm:flex">
-          <div className="h-7 w-px bg-border" />
-          <Clock />
-          <div className="h-7 w-px bg-border" />
-          <div className="leading-tight text-right">
-            <div className="text-sm font-semibold text-foreground">{user?.role ?? "Cashier"}</div>
-            <div className="text-xs text-muted-foreground">{user?.name ?? "Guest"}</div>
-          </div>
-        </div>
-        <ThemeToggle />
       </div>
 
       {showCount && <CashCountModal onClose={() => setShowCount(false)} />}

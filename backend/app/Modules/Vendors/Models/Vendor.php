@@ -7,14 +7,22 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Vendor extends Model
 {
-    protected $fillable = ['store_id', 'name', 'phone', 'address', 'balance', 'is_active'];
+    protected $fillable = [
+        'store_id', 'name', 'phone', 'address', 'balance', 'is_active', 'ranking',
+    ];
 
     protected function casts(): array
     {
         return [
             'balance' => 'decimal:2',
             'is_active' => 'boolean',
+            'ranking' => 'integer',
         ];
+    }
+
+    public function contacts(): HasMany
+    {
+        return $this->hasMany(VendorContact::class)->orderBy('id');
     }
 
     public function purchases(): HasMany

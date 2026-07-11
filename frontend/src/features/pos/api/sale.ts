@@ -1,5 +1,6 @@
 import { apiFetch } from "@/lib/api";
 import type { CartLine, PaymentMethod } from "../types";
+import { maxLineDiscount } from "../discount";
 
 interface SaleArgs {
   /** Stable per-checkout id so a retry after a lost response can't double-bill. */
@@ -11,6 +12,7 @@ interface SaleArgs {
   tendered: number;
   change: number;
   customerId: number | null;
+  referenceId?: string;
   discountRecipientName?: string;
   discountReason?: string;
 }
@@ -36,16 +38,26 @@ export async function submitSale(args: SaleArgs): Promise<{ invoiceNo: string }>
     discount_recipient_name: args.discountRecipientName?.trim() || undefined,
     discount_reason: args.discountReason?.trim() || undefined,
     total: args.total,
-    lines: args.lines.map((line) => ({
-      product_id: Number.isFinite(Number(line.product.id)) ? Number(line.product.id) : null,
-      barcode: line.product.barcode,
-      name: line.product.name,
-      qty: line.qty,
-      unit_price: line.product.price,
-      line_total: line.product.price * line.qty,
-    })),
+    lines: args.lines.map((line) => {
+      const gross = line.product.price * line.qty;
+      const lineDisc = Math.min(maxLineDiscount(line), Math.max(0, line.discount ?? 0));
+      return {
+        product_id: Number.isFinite(Number(line.product.id)) ? Number(line.product.id) : null,
+        barcode: line.product.barcode,
+        name: line.product.name,
+        qty: line.qty,
+        unit_price: line.product.price,
+        line_total: Math.round((gross - lineDisc) * 100) / 100,
+      };
+    }),
     payments: [
-      { method: args.method, amount: args.total, tendered: args.tendered, change: args.change },
+      {
+        method: args.method,
+        amount: args.total,
+        tendered: args.tendered,
+        change: args.change,
+        reference_id: args.referenceId?.trim() || undefined,
+      },
     ],
   };
 

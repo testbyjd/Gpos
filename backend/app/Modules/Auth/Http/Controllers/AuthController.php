@@ -44,10 +44,13 @@ class AuthController extends Controller
             'pin' => ['required', 'digits_between:4,8'],
         ]);
 
-        $user = $request->user();
-        $allowed = in_array($user->role, ['owner', 'manager'], true)
-            && $user->pin_hash
-            && Hash::check($data['pin'], $user->pin_hash);
+        // Manager override: any active owner/manager PIN works (cashier POS pe bhi).
+        $allowed = User::query()
+            ->whereIn('role', ['owner', 'manager'])
+            ->where('is_active', true)
+            ->whereNotNull('pin_hash')
+            ->get()
+            ->contains(fn (User $user) => Hash::check($data['pin'], $user->pin_hash));
 
         return response()->json(['ok' => $allowed], $allowed ? 200 : 403);
     }

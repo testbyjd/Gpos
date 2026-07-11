@@ -8,6 +8,14 @@ import { cn, formatMoney } from "@/lib/utils";
 import { useModalDismiss } from "@/lib/hooks/useModalDismiss";
 import { DENOMINATIONS } from "./data";
 import { closeTill, getTillSummary, type ClosedTill, type TillSummary } from "./api";
+import { PaymentHandoverPanel } from "./PaymentHandoverPanel";
+import {
+  NonCashSettlePanel,
+  settlementsNeedNotes,
+  type PaymentSettlement,
+} from "./NonCashSettlePanel";
+import { getErrorMessage } from "@/lib/api";
+import { paymentMethodLabel } from "@/features/pos/paymentMethods";
 
 interface Props {
   onClose: () => void;
@@ -31,6 +39,8 @@ export function CloseTillModal({ onClose }: Props) {
   const [result, setResult] = useState<ClosedTill | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [settlements, setSettlements] = useState<PaymentSettlement[]>([]);
+  const [nonCashOk, setNonCashOk] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -59,12 +69,18 @@ export function CloseTillModal({ onClose }: Props) {
   const varianceLabel =
     variance === 0 ? "Balanced" : variance > 0 ? "Over (extra)" : "Short";
 
+  const notesRequired =
+    (counting && Math.abs(variance) >= 0.01) || settlementsNeedNotes(settlements);
+  const notesMissing = notesRequired && !notes.trim();
+  const canClose =
+    counting && !retainTooHigh && !submitting && !!summary && nonCashOk && !notesMissing;
+
   function setQty(denom: number, value: string) {
     setCounts((prev) => ({ ...prev, [denom]: value.replace(/[^0-9]/g, "") }));
   }
 
   async function submit() {
-    if (!counting || retainTooHigh || submitting) return;
+    if (!canClose) return;
     setSubmitting(true);
     setSubmitError(null);
     const denominations: Record<string, number> = {};
@@ -78,10 +94,18 @@ export function CloseTillModal({ onClose }: Props) {
         retained_float: retainNum,
         denominations,
         notes: notes.trim() || undefined,
+        payment_settlements: settlements
+          .filter((s) => s.expected > 0)
+          .map((s) => ({
+            method: s.method,
+            expected: s.expected,
+            settled: s.settled,
+            confirmed: s.confirmed,
+          })),
       });
       setResult(closed);
-    } catch {
-      setSubmitError("Till close fail hua. Server check karo.");
+    } catch (err) {
+      setSubmitError(getErrorMessage(err, "Till close fail hua. Server check karo."));
     } finally {
       setSubmitting(false);
     }
@@ -91,6 +115,23 @@ export function CloseTillModal({ onClose }: Props) {
     ["Opening float", summary?.opening_float ?? 0],
     ["Cash sales", summary?.cash_sales ?? 0],
   ];
+
+  const breakdown = useMemo(() => {
+    if (summary?.payment_breakdown?.length) return summary.payment_breakdown;
+    return [
+      { method: "cash", amount: summary?.cash_sales ?? 0 },
+      { method: "card", amount: summary?.card_total ?? 0 },
+      { method: "easypaisa", amount: 0 },
+      { method: "jazzcash", amount: 0 },
+      { method: "bank_transfer", amount: 0 },
+      { method: "khata", amount: summary?.khata_total ?? 0 },
+    ];
+  }, [summary]);
+
+  const nonCashBreakdown = useMemo(
+    () => breakdown.filter((r) => r.method !== "cash"),
+    [breakdown],
+  );
 
   if (typeof document === "undefined") return null;
 
@@ -178,6 +219,27 @@ export function CloseTillModal({ onClose }: Props) {
               </div>
             </div>
 
+            {(result.payment_totals?.length ?? 0) > 0 && (
+              <div className="mx-auto mt-4 max-w-sm rounded-lg border border-border/80 bg-card p-4 text-left text-sm">
+                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                  Closed payment methods
+                </p>
+                <div className="mt-2 space-y-1.5">
+                  {result.payment_totals!.map((row) => (
+                    <div key={row.method} className="flex justify-between gap-3">
+                      <span className="text-muted-foreground">{paymentMethodLabel(row.method)}</span>
+                      <span className="text-right font-bold tabular-nums text-foreground">
+                        {formatMoney(Number(row.settled ?? row.amount ?? 0))}
+                        {row.variance != null && Math.abs(Number(row.variance)) >= 0.01
+                          ? ` (${Number(row.variance) > 0 ? "+" : ""}${formatMoney(Number(row.variance))})`
+                          : ""}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="mx-auto mt-5 grid max-w-sm grid-cols-2 gap-2">
               <Button variant="secondary" size="lg" onClick={() => window.print()}>
                 <Printer className="h-5 w-5" />
@@ -221,25 +283,11 @@ export function CloseTillModal({ onClose }: Props) {
                     </div>
                   </div>
 
-                  <div className="rounded-lg border border-border/80 bg-card p-4">
-                    <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                      Other settlements (for record)
-                    </p>
-                    <div className="mt-3 space-y-2 text-sm">
-                      {[
-                        ["Card", summary?.card_total ?? 0],
-                        ["Wallet / QR", summary?.wallet_total ?? 0],
-                        ["Khata extended", summary?.khata_total ?? 0],
-                      ].map(([label, value]) => (
-                        <div key={label as string} className="flex justify-between">
-                          <span className="text-muted-foreground">{label}</span>
-                          <span className="font-bold tabular-nums text-foreground">
-                            {formatMoney(value as number)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  <PaymentHandoverPanel
+                    rows={breakdown}
+                    title="Payment methods — close & handover"
+                    hint="Session ke tamam payment methods. Close pe yeh totals record ho jayenge (sirf cash drawer count + variance)."
+                  />
                 </div>
 
                 {/* Counted side */}
@@ -309,8 +357,8 @@ export function CloseTillModal({ onClose }: Props) {
                 </div>
               </div>
 
-              {/* Cash handover / float carry-forward */}
-              <div className="px-5 pb-1">
+              {/* Cash handover / float + payment methods */}
+              <div className="space-y-4 px-5 pb-1">
                 <div className="rounded-lg border border-border/80 bg-card p-4">
                   <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
                     Cash handover
@@ -347,6 +395,24 @@ export function CloseTillModal({ onClose }: Props) {
                     </p>
                   )}
                 </div>
+
+                <PaymentHandoverPanel
+                  rows={nonCashBreakdown}
+                  hideCash
+                  title="Non-cash expected (session)"
+                  hint="Neeche settle checklist mein confirm / amount match karo."
+                />
+
+                <NonCashSettlePanel
+                  rows={breakdown}
+                  mode="settle"
+                  title="Non-cash settle checklist"
+                  hint="Har method confirm karo. Amount alag ho to notes lazmi."
+                  onChange={(next, ok) => {
+                    setSettlements(next);
+                    setNonCashOk(ok);
+                  }}
+                />
               </div>
             </div>
 
@@ -354,16 +420,26 @@ export function CloseTillModal({ onClose }: Props) {
             <div className="shrink-0 border-t border-border/80 px-5 py-4">
               <label className="block">
                 <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                  Notes (optional)
+                  Notes {notesRequired ? <span className="text-danger">(lazmi — variance)</span> : "(optional)"}
                 </span>
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   rows={2}
-                  placeholder="Reason for variance, cash drops, etc."
+                  placeholder="Reason for cash / non-cash variance, missing slip, etc."
                   className="w-full resize-none rounded-md border border-border bg-input px-3 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
                 />
               </label>
+              {notesMissing && (
+                <p className="mt-2 text-xs font-bold text-danger">
+                  Farq / miss hai — pehle notes likho, phir close.
+                </p>
+              )}
+              {!nonCashOk && (
+                <p className="mt-2 text-xs font-bold text-danger">
+                  Non-cash methods confirm nahi — close nahi ho sakta.
+                </p>
+              )}
               {submitError && (
                 <p className="mt-3 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm font-bold text-danger">
                   {submitError}
@@ -376,7 +452,7 @@ export function CloseTillModal({ onClose }: Props) {
                 <Button
                   size="lg"
                   className="col-span-2"
-                  disabled={!counting || retainTooHigh || submitting || !summary}
+                  disabled={!canClose}
                   onClick={submit}
                 >
                   <Lock className="h-5 w-5" />

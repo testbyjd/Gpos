@@ -35,6 +35,7 @@ class SaleSyncTest extends TestCase
                 'payments' => [[
                     'method' => $method,
                     'amount' => 100,
+                    ...($method === 'cash' ? [] : ['reference_id' => 'REF-TEST-1']),
                 ]],
             ]],
         ];

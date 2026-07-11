@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class SalePayment extends Model
 {
     protected $fillable = [
-        'sale_id', 'method', 'amount', 'tendered', 'change_amount',
+        'sale_id', 'method', 'amount', 'tendered', 'change_amount', 'reference_id',
     ];
 
     protected function casts(): array
