@@ -17,8 +17,15 @@ class CustomerController extends Controller
 
         return response()->json([
             'data' => Customer::query()
-                ->when($q !== '', fn ($query) => $query->where('name', 'ilike', "%{$q}%")->orWhere('phone', 'ilike', "%{$q}%")->orWhere('code', 'ilike', "%{$q}%"))
+                ->when($q !== '', function ($query) use ($q) {
+                    $query->where(function ($inner) use ($q) {
+                        $inner->where('name', 'ilike', "%{$q}%")
+                            ->orWhere('phone', 'ilike', "%{$q}%")
+                            ->orWhere('code', 'ilike', "%{$q}%");
+                    });
+                })
                 ->where('is_active', true)
+                ->orderByDesc('ranking')
                 ->orderBy('name')
                 ->get(),
         ]);
@@ -26,14 +33,36 @@ class CustomerController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $customer = Customer::create($request->validate([
+        $data = $request->validate([
             'store_id' => ['nullable', 'integer', 'exists:stores,id'],
             'code' => ['nullable', 'string', 'max:40'],
             'name' => ['required', 'string', 'max:160'],
             'phone' => ['nullable', 'string', 'max:40'],
-        ]));
+            'ranking' => ['nullable', 'integer', 'min:0', 'max:5'],
+        ]);
+
+        $customer = Customer::create([
+            ...$data,
+            'ranking' => (int) ($data['ranking'] ?? 0),
+        ]);
 
         return response()->json(['data' => $customer], 201);
+    }
+
+    public function update(Request $request, Customer $customer): JsonResponse
+    {
+        $data = $request->validate([
+            'name' => ['sometimes', 'required', 'string', 'max:160'],
+            'phone' => ['nullable', 'string', 'max:40'],
+            'code' => ['nullable', 'string', 'max:40'],
+            'ranking' => ['nullable', 'integer', 'min:0', 'max:5'],
+            'is_active' => ['nullable', 'boolean'],
+        ]);
+
+        $customer->fill($data);
+        $customer->save();
+
+        return response()->json(['data' => $customer->fresh()]);
     }
 
     public function ledger(Customer $customer): JsonResponse

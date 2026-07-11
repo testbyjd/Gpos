@@ -26,7 +26,7 @@ interface PushResult {
  * server invoice number. THROWS if the server is unreachable (no internet) —
  * the caller must then NOT treat the sale as complete.
  */
-export async function submitSale(args: SaleArgs): Promise<{ invoiceNo: string }> {
+export async function submitSale(args: SaleArgs): Promise<{ invoiceNo: string; saleId: number }> {
   const subtotal = args.lines.reduce((sum, line) => sum + line.product.price * line.qty, 0);
 
   const sale = {
@@ -67,6 +67,7 @@ export async function submitSale(args: SaleArgs): Promise<{ invoiceNo: string }>
   });
 
   const invoiceNo = res.results?.[0]?.invoice_no;
-  if (!invoiceNo) throw new Error("Sale not confirmed by server");
-  return { invoiceNo };
+  const saleId = res.results?.[0]?.server_id;
+  if (!invoiceNo || !saleId) throw new Error("Sale not confirmed by server");
+  return { invoiceNo, saleId: Number(saleId) };
 }

@@ -496,6 +496,7 @@ export function PosRegister() {
     const billTotal = Math.max(0, billSubtotal - billDiscountTotal);
 
     let invoice: string;
+    let saleId: number;
     try {
       const res = await submitSale({
         clientId: saleClientId.current ?? crypto.randomUUID(),
@@ -511,6 +512,7 @@ export function PosRegister() {
         referenceId: referenceId?.trim() || undefined,
       });
       invoice = res.invoiceNo;
+      saleId = res.saleId;
     } catch (err) {
       showToast(getErrorMessage(err, "Bill save NAHI hua — connection ya server check karke dobara try karein."), "error");
       throw new Error("sale-failed");
@@ -521,6 +523,7 @@ export function PosRegister() {
     setPayOpen(false);
     setMorePayOpen(false);
     setSaleResult({
+      saleId,
       invoice,
       total: billTotal,
       tendered,

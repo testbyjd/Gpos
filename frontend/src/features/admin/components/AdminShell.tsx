@@ -17,6 +17,7 @@ import {
   Store,
   Truck,
   UsersRound,
+  Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
@@ -41,6 +42,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/khata", label: "Khata", icon: UsersRound },
   { href: "/vendors", label: "Vendors", icon: Truck },
   { href: "/payables", label: "Payables", icon: ReceiptText },
+  { href: "/expenses", label: "Expenses", icon: Wallet },
   { href: "/purchases", label: "Purchases", icon: PackagePlus },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/settings", label: "Settings", icon: Settings, roles: ["owner"] },

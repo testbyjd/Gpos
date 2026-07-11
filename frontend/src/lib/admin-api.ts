@@ -50,6 +50,7 @@ export interface CustomerRow {
   phone: string | null;
   balance: string | number;
   is_active: boolean;
+  ranking?: number;
 }
 
 export interface PurchaseRow {
@@ -229,9 +230,25 @@ export function listCustomers() {
   return apiFetch<{ data: CustomerRow[] }>("/customers");
 }
 
-export function createCustomer(data: { name: string; phone?: string | null; code?: string | null }) {
+export function createCustomer(data: { name: string; phone?: string | null; code?: string | null; ranking?: number }) {
   return apiFetch<{ data: CustomerRow }>("/customers", {
     method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateCustomer(
+  id: number,
+  data: {
+    name?: string;
+    phone?: string | null;
+    code?: string | null;
+    ranking?: number;
+    is_active?: boolean;
+  },
+) {
+  return apiFetch<{ data: CustomerRow }>(`/customers/${id}`, {
+    method: "PUT",
     body: JSON.stringify(data),
   });
 }
@@ -524,9 +541,75 @@ export interface ReceiptSettings {
   address: string;
   phone: string;
   footer_note: string;
-  paper_width: "58" | "80";
+  paper_width: "58" | "80" | "110" | "112";
   show_cashier: boolean;
   show_customer: boolean;
+  /** Body text size (px). */
+  font_size?: number;
+  /** Body font weight 400–900. */
+  font_weight?: number;
+  /** Shop name size (px). */
+  title_size?: number;
+  /** Line height multiplier. */
+  line_height?: number;
+  /** Receipt padding (px). */
+  padding?: number;
+  /** Gap around dividers (px). */
+  section_gap?: number;
+}
+
+export const RECEIPT_DESIGN_DEFAULTS = {
+  font_size: 12,
+  font_weight: 700,
+  title_size: 17,
+  line_height: 1.35,
+  padding: 12,
+  section_gap: 7,
+} as const;
+
+export function normalizeReceiptSettings(data: Partial<ReceiptSettings> | null | undefined): ReceiptSettings {
+  return {
+    shop_name: data?.shop_name ?? "Gondal Traders",
+    tagline: data?.tagline ?? "",
+    address: data?.address ?? "",
+    phone: data?.phone ?? "",
+    footer_note: data?.footer_note ?? "Shukria! Dobara tashreef laaiye.",
+    paper_width: normalizePaperWidth(data?.paper_width),
+    show_cashier: data?.show_cashier ?? true,
+    show_customer: data?.show_customer ?? true,
+    font_size: clampNum(data?.font_size, RECEIPT_DESIGN_DEFAULTS.font_size, 10, 18),
+    font_weight: clampNum(data?.font_weight, RECEIPT_DESIGN_DEFAULTS.font_weight, 400, 900),
+    title_size: clampNum(data?.title_size, RECEIPT_DESIGN_DEFAULTS.title_size, 12, 26),
+    line_height: clampNum(data?.line_height, RECEIPT_DESIGN_DEFAULTS.line_height, 1.1, 1.9),
+    padding: clampNum(data?.padding, RECEIPT_DESIGN_DEFAULTS.padding, 4, 24),
+    section_gap: clampNum(data?.section_gap, RECEIPT_DESIGN_DEFAULTS.section_gap, 2, 16),
+  };
+}
+
+function clampNum(value: unknown, fallback: number, min: number, max: number) {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
+function normalizePaperWidth(value: unknown): ReceiptSettings["paper_width"] {
+  if (value === "58" || value === "80" || value === "110" || value === "112") return value;
+  return "80";
+}
+
+/** Preview CSS width for thermal paper sizes (approx). */
+export function receiptWidthPx(paperWidth: ReceiptSettings["paper_width"]): number {
+  switch (paperWidth) {
+    case "58":
+      return 220;
+    case "110":
+      return 420;
+    case "112":
+      return 430;
+    case "80":
+    default:
+      return 300;
+  }
 }
 
 export function getReceiptSettings() {
@@ -595,4 +678,100 @@ export function updateUser(
     method: "PATCH",
     body: JSON.stringify(data),
   });
+}
+
+export const EXPENSE_PAYMENT_METHODS = [
+  { value: "cash", label: "Cash" },
+  { value: "bank", label: "Bank" },
+  { value: "jazzcash", label: "JazzCash" },
+  { value: "easypaisa", label: "EasyPaisa" },
+  { value: "other", label: "Other" },
+] as const;
+
+export type ExpensePaymentMethod = (typeof EXPENSE_PAYMENT_METHODS)[number]["value"];
+
+export interface ExpenseCategoryRow {
+  id: number;
+  name: string;
+  is_active: boolean;
+  store_id?: number | null;
+}
+
+export interface ExpenseRow {
+  id: number;
+  category_id: number;
+  category?: ExpenseCategoryRow | { id: number; name: string } | null;
+  amount: string | number;
+  payment_method: ExpensePaymentMethod | string;
+  spent_on: string;
+  note: string | null;
+  created_by: number | null;
+  creator?: { id: number; name: string; role: string } | null;
+  created_at?: string;
+}
+
+export interface ExpenseSummary {
+  from: string;
+  to: string;
+  period_total: number;
+  today_total: number;
+  count: number;
+  by_category: Array<{ category: string; category_id?: number; total: number; count: number }>;
+}
+
+export function listExpenseCategories() {
+  return apiFetch<{ data: ExpenseCategoryRow[] }>("/expense-categories");
+}
+
+export function createExpenseCategory(name: string) {
+  return apiFetch<{ data: ExpenseCategoryRow }>("/expense-categories", {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+}
+
+export function deleteExpenseCategory(id: number) {
+  return apiFetch<{ ok: boolean }>(`/expense-categories/${id}`, { method: "DELETE" });
+}
+
+export function listExpenses(params: { from?: string; to?: string; categoryId?: number } = {}) {
+  const q = new URLSearchParams();
+  if (params.from) q.set("from", params.from);
+  if (params.to) q.set("to", params.to);
+  if (params.categoryId) q.set("category_id", String(params.categoryId));
+  const qs = q.toString();
+  return apiFetch<{ data: ExpenseRow[]; summary: ExpenseSummary }>(`/expenses${qs ? `?${qs}` : ""}`);
+}
+
+export function createExpense(data: {
+  category_id: number;
+  amount: number;
+  payment_method?: string;
+  spent_on: string;
+  note?: string | null;
+}) {
+  return apiFetch<{ data: ExpenseRow }>("/expenses", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateExpense(
+  id: number,
+  data: Partial<{
+    category_id: number;
+    amount: number;
+    payment_method: string;
+    spent_on: string;
+    note: string | null;
+  }>,
+) {
+  return apiFetch<{ data: ExpenseRow }>(`/expenses/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteExpense(id: number) {
+  return apiFetch<{ ok: boolean }>(`/expenses/${id}`, { method: "DELETE" });
 }

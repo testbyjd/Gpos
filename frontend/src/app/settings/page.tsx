@@ -8,6 +8,7 @@ import { SearchInput } from "@/components/ui/search-input";
 import { FilterChips } from "@/components/ui/filter-chips";
 import { getUsersSettings, updateUserPassword } from "@/lib/admin-api";
 import { getErrorMessage } from "@/lib/api";
+import { checkPrintBridge, printBridgeBase } from "@/lib/print-bridge";
 import { UserFormModal } from "@/features/admin/components/AdminActionModals";
 import { ModalPortal } from "@/components/ui/modal-portal";
 import { useModalDismiss } from "@/lib/hooks/useModalDismiss";
@@ -144,6 +145,7 @@ export default function SettingsPage() {
   const [resetUser, setResetUser] = useState<UserRow | null>(null);
   const [editUser, setEditUser] = useState<UserRow | null>(null);
   const [showAddUser, setShowAddUser] = useState(false);
+  const [bridge, setBridge] = useState<{ ok: boolean; printer?: string } | null>(null);
 
   function loadUsers() {
     getUsersSettings()
@@ -161,6 +163,20 @@ export default function SettingsPage() {
     loadUsers();
   }, []);
 
+  useEffect(() => {
+    let alive = true;
+    function ping() {
+      checkPrintBridge().then((res) => {
+        if (alive) setBridge(res);
+      });
+    }
+    ping();
+    const id = window.setInterval(ping, 8000);
+    return () => {
+      alive = false;
+      window.clearInterval(id);
+    };
+  }, []);
   const filteredUsers = useMemo(() => {
     const users = data?.data ?? [];
     const q = search.trim().toLowerCase();
@@ -217,15 +233,39 @@ export default function SettingsPage() {
           </PagePanel>
 
           <PagePanel>
-            <PanelHeader title="Print bridge" meta="Thermal receipt and cash drawer setup" />
+            <PanelHeader
+              title="Print bridge"
+              meta="Local agent — drawer kick + thermal (register PC pe chalao)"
+            />
             <DataTable
               columns={["Device", "Connection", "State"]}
-              rows={(data?.settings.print_bridge ?? []).map((printer) => [
-                <span key="device" className="font-bold text-foreground">{printer.device}</span>,
-                printer.connection,
-                <StatusPill key="state" tone="good">{printer.state}</StatusPill>,
-              ])}
+              rows={[
+                [
+                  <span key="device" className="font-bold text-foreground">
+                    Local print bridge
+                  </span>,
+                  bridge?.printer
+                    ? `Printer ${bridge.printer}`
+                    : printBridgeBase(),
+                  <StatusPill key="state" tone={bridge?.ok ? "good" : "danger"}>
+                    {bridge == null ? "Checking…" : bridge.ok ? "Ready" : "Offline"}
+                  </StatusPill>,
+                ],
+                ...(data?.settings.print_bridge ?? []).map((printer) => [
+                  <span key="device" className="font-bold text-foreground">
+                    {printer.device}
+                  </span>,
+                  printer.connection,
+                  <StatusPill key="state" tone="neutral">
+                    {printer.state} (server note)
+                  </StatusPill>,
+                ]),
+              ]}
             />
+            <p className="border-t border-border/80 px-4 py-3 text-xs text-muted-foreground">
+              Register PC: <code className="rounded bg-muted px-1">node print-bridge/server.js</code>
+              {" · "}Sale pe drawer auto-open · Receipt sirf Print button se
+            </p>
           </PagePanel>
         </div>
 

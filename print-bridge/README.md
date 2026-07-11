@@ -1,29 +1,27 @@
 # Print Bridge — Local Hardware Agent
 
-Browser raw ESC/POS bytes ya drawer-kick pulse direct nahi bhej sakta (plan §2.4).
-Ye chhota local agent har register PC par chalta hai aur thermal printer + cash drawer
-ko handle karta hai.
+Browser raw ESC/POS / drawer-kick direct nahi bhej sakta. Har register PC pe yeh agent chalao.
 
-> **Yeh ek alag deliverable hai, one-line feature nahi.** Apni testing time ke saath.
+## Run
 
-## Responsibility
-- **Thermal print**: 80mm (3-inch) ESC/POS receipts.
-- **Cash drawer kick**: standard pulse printer ke RJ11 port se (drawer printer ke through wired ho tabhi chalega).
-- Frontend se localhost par receipt payload accept karna (HTTP/WebSocket).
-
-## Structure
-```
-src/
-├── printer/     # ESC/POS command builder + transport (USB/serial/network)
-├── drawer/      # kick command via printer RJ11
-└── queue/       # local job queue (retry on transient printer errors)
-config/          # printer model, port, paper width, receipt fields
+```bash
+cd print-bridge
+node server.js
 ```
 
-## Receipt fields (confirm with owner — plan §4.7)
-Store name+contact, date/time, invoice no., cashier, line items (name/qty/unit/rate/amount),
-subtotal, discount, total, payment method, tendered/change, Khata balance (if credit), footer note.
+Default: `http://127.0.0.1:9191`
 
-## Implementation options (developer's choice)
-- QZ Tray, a small Node/Electron local agent, ya native wrapper.
-- The **requirement** fixed hai; the **method** open hai.
+| Endpoint | Action |
+|----------|--------|
+| `GET /health` | Bridge alive? |
+| `POST /drawer` | Cash drawer open (ESC/POS pulse via printer) |
+
+## Config (`config.json`)
+
+- `listenPort` — bridge HTTP (default **9191**)
+- `printerHost` / `printerPort` — thermal printer raw TCP (aksar **9100**)
+- Drawer RJ11 se printer pe wired hona zaroori hai
+
+## POS
+
+Sale complete pe frontend `POST /drawer` call karta hai. Receipt print alag **Print** button se (browser receipt).

@@ -1,0 +1,9 @@
+{
+  "listenHost": "127.0.0.1",
+  "listenPort": 9191,
+  "printerHost": "127.0.0.1",
+  "printerPort": 9100,
+  "drawerPin": 0,
+  "drawerOnMs": 25,
+  "drawerOffMs": 250
+}

@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useState, type ReactNode } from "react";
-import { PackagePlus, Pencil, Printer, RotateCcw, X } from "lucide-react";
+import { PackagePlus, Pencil, Printer, RotateCcw, Star, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ModalPortal } from "@/components/ui/modal-portal";
 import { useModalDismiss } from "@/lib/hooks/useModalDismiss";
-import { formatMoney, formatSignedBalance } from "@/lib/utils";
+import { cn, formatMoney, formatSignedBalance } from "@/lib/utils";
 import { formatPkDateTime } from "@/lib/datetime";
 import { DataTable, StatusPill } from "@/features/admin/components/AdminShell";
 import { SaleReceiptPrint } from "@/features/sales/components/SaleReceiptPrint";
@@ -20,6 +20,7 @@ import {
   getVendorDetail,
   listSales,
   recordCustomerRepayment,
+  updateCustomer,
   type CustomerRow,
   type LedgerEntry,
   type PurchaseRow,
@@ -114,6 +115,41 @@ function SectionTitle({ children }: { children: ReactNode }) {
   return <h4 className="mb-2 mt-5 text-sm font-black text-foreground">{children}</h4>;
 }
 
+function RankingStars({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: number;
+  onChange: (n: number) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-1" role="radiogroup" aria-label="Customer ranking">
+      {[1, 2, 3, 4, 5].map((n) => {
+        const filled = n <= value;
+        return (
+          <button
+            key={n}
+            type="button"
+            role="radio"
+            aria-checked={n === value}
+            aria-label={`${n} star${n === 1 ? "" : "s"}`}
+            disabled={disabled}
+            onClick={() => onChange(value === n ? 0 : n)}
+            className="rounded p-0.5 text-warning transition hover:scale-110 disabled:opacity-50"
+          >
+            <Star className={cn("h-5 w-5", filled ? "fill-current" : "fill-transparent text-muted-foreground/50")} />
+          </button>
+        );
+      })}
+      <span className="ml-1 text-xs font-semibold text-muted-foreground">
+        {value === 0 ? "Unrated" : `${value}/5`}
+      </span>
+    </div>
+  );
+}
+
 export function CustomerDetailDrawer({
   customer,
   onClose,
@@ -126,6 +162,8 @@ export function CustomerDetailDrawer({
   onNotify?: (message: string) => void;
 }) {
   const [balance, setBalance] = useState(Number(customer.balance));
+  const [ranking, setRanking] = useState(Number(customer.ranking ?? 0));
+  const [savingRank, setSavingRank] = useState(false);
   const [entries, setEntries] = useState<LedgerEntry[]>([]);
   const [sales, setSales] = useState<SaleRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -143,6 +181,7 @@ export function CustomerDetailDrawer({
       ]);
       setEntries(ledger.entries);
       setBalance(Number(ledger.customer.balance));
+      setRanking(Number(ledger.customer.ranking ?? 0));
       setSales(saleList.data);
       onChanged?.(ledger.customer);
     } catch (err) {
@@ -153,9 +192,26 @@ export function CustomerDetailDrawer({
   }
 
   useEffect(() => {
+    setRanking(Number(customer.ranking ?? 0));
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customer.id]);
+
+  async function saveRanking(next: number) {
+    const prev = ranking;
+    setRanking(next);
+    setSavingRank(true);
+    try {
+      const res = await updateCustomer(customer.id, { ranking: next });
+      onChanged?.(res.data);
+      onNotify?.(next === 0 ? "Ranking clear ho gaya." : `Ranking ${next}/5 save ho gayi.`);
+    } catch (err) {
+      setRanking(prev);
+      setLoadError(getErrorMessage(err, "Ranking save nahi hui."));
+    } finally {
+      setSavingRank(false);
+    }
+  }
 
   return (
     <Drawer
@@ -175,6 +231,11 @@ export function CustomerDetailDrawer({
             Wasooli karo
           </Button>
         </div>
+      </div>
+
+      <div className="mt-4 rounded-lg border border-border/80 bg-background p-3">
+        <p className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">Ranking</p>
+        <RankingStars value={ranking} onChange={saveRanking} disabled={savingRank} />
       </div>
 
       <SectionTitle>Bill history</SectionTitle>

@@ -94,16 +94,16 @@ export function MeriShelf({
             <button
               type="button"
               onClick={() => setPicking(true)}
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/40 px-2 text-xs font-bold text-primary transition-colors hover:bg-primary/10"
+              className="inline-flex h-8 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-primary/40 px-2.5 text-xs font-bold text-primary transition-colors hover:bg-primary/10"
             >
-              <Plus className="h-3.5 w-3.5" />
+              <Plus className="h-3.5 w-3.5 shrink-0" />
               Add product
             </button>
           )}
           <button
             type="button"
             onClick={onToggle}
-            className="hidden h-8 rounded-md border border-border px-2 text-xs font-bold text-muted-foreground transition-colors hover:bg-card-hover lg:inline-flex"
+            className="hidden h-8 items-center justify-center rounded-md border border-border px-2.5 text-xs font-bold leading-none text-muted-foreground transition-colors hover:bg-card-hover lg:inline-flex"
           >
             Band
           </button>
@@ -154,9 +154,9 @@ export function MeriShelf({
             <button
               type="button"
               onClick={() => setPicking(true)}
-              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-primary/40 px-3 text-xs font-bold text-primary transition-colors hover:bg-primary/10"
+              className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-primary/40 px-3 text-xs font-bold text-primary transition-colors hover:bg-primary/10"
             >
-              <Plus className="h-3.5 w-3.5" />
+              <Plus className="h-3.5 w-3.5 shrink-0" />
               Add product
             </button>
           </div>

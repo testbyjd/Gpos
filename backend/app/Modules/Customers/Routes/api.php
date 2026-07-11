@@ -9,6 +9,7 @@ Route::middleware('auth:sanctum')->prefix('customers')->group(function () {
 
     Route::middleware('role:owner,manager')->group(function () {
         Route::post('/', [CustomerController::class, 'store']);
+        Route::put('/{customer}', [CustomerController::class, 'update']);
         Route::get('/{customer}/ledger', [CustomerController::class, 'ledger']);
         Route::post('/{customer}/repayments', [CustomerController::class, 'repayment']);
     });

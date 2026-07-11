@@ -5,28 +5,21 @@ import { Printer, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ModalPortal } from "@/components/ui/modal-portal";
 import { ReceiptPreview } from "@/features/admin/components/ReceiptPreview";
-import { getReceiptSettings, type ReceiptSettings } from "@/lib/admin-api";
+import { getReceiptSettings, normalizeReceiptSettings, type ReceiptSettings } from "@/lib/admin-api";
 import { getErrorMessage } from "@/lib/api";
 import type { SaleDetail } from "@/lib/admin-api";
 import { saleToReceiptData } from "../saleReceipt";
 
-const DEFAULTS: ReceiptSettings = {
-  shop_name: "Gondal Traders",
-  tagline: "",
-  address: "",
-  phone: "",
-  footer_note: "Shukria! Dobara tashreef laaiye.",
-  paper_width: "80",
-  show_cashier: true,
-  show_customer: true,
-};
+const DEFAULTS = normalizeReceiptSettings({});
 
 interface Props {
   sale: SaleDetail;
   onClose: () => void;
+  /** When true, open browser print dialog once receipt is ready (POS Print button). */
+  autoPrint?: boolean;
 }
 
-export function SaleReceiptPrint({ sale, onClose }: Props) {
+export function SaleReceiptPrint({ sale, onClose, autoPrint = false }: Props) {
   const [settings, setSettings] = useState<ReceiptSettings>(DEFAULTS);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +29,7 @@ export function SaleReceiptPrint({ sale, onClose }: Props) {
     getReceiptSettings()
       .then((res) => {
         if (!alive) return;
-        setSettings({ ...DEFAULTS, ...res.data });
+        setSettings(normalizeReceiptSettings(res.data));
         setReady(true);
       })
       .catch((err) => {
@@ -48,6 +41,12 @@ export function SaleReceiptPrint({ sale, onClose }: Props) {
       alive = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!autoPrint || !ready || error) return;
+    const t = window.setTimeout(() => window.print(), 150);
+    return () => window.clearTimeout(t);
+  }, [autoPrint, ready, error]);
 
   function handlePrint() {
     window.print();
