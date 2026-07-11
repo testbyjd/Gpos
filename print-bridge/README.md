@@ -6,11 +6,48 @@ POS website (`https://gondaltrader.com/pos`) **server** pe chalti hai, lekin **p
 ```
 Store PC browser → gondaltrader.com/pos     (internet / server)
                → http://127.0.0.1:9191      (isi PC pe print-bridge)
-                    → thermal printer :9100
+                    → USB COM  ya  TCP :9100  (thermal printer)
                          → cash drawer (RJ11 via printer)
 ```
 
 Server (VPS) pe print-bridge **nahi** chalana.
+
+---
+
+## Bixolon SRP-352+ (USB) — important
+
+Yeh **USB** printer hai. Iska matlab:
+
+- Network port **9100** pe kuch nahi chalta  
+- `127.0.0.1:9100` → **ECONNREFUSED** normal hai (galat transport)  
+- Drawer printer ke RJ11 se juda hota hai; bridge ko printer tak ESC/POS **COM port** se bhejna hota hai  
+
+### Steps
+
+1. Bixolon Windows driver / Unified Driver install karo (official site)  
+2. Driver settings mein **Virtual Serial Port (VCOM)** enable karo agar option ho  
+3. **Device Manager** → **Ports (COM & LPT)** → dekho kaunsa COM hai, e.g. `COM3` / `COM4` (Bixolon / USB Serial)  
+4. `config.json` aisa rakho:
+
+```json
+{
+  "listenHost": "127.0.0.1",
+  "listenPort": 9191,
+  "transport": "com",
+  "comPort": "COM3",
+  "drawerPin": 0,
+  "drawerOnMs": 25,
+  "drawerOffMs": 250
+}
+```
+
+`COM3` ko Device Manager wale number se replace karo.
+
+5. Bridge restart: `node server.js`  
+6. Console mein dikhna chahiye: `printer COM COM3`  
+7. POS Settings → **Test drawer**
+
+Agar COM write fail: galat COM number, printer band, ya VCOM off. `drawerPin` `0` try karo, phir `1`.
 
 ---
 
@@ -43,12 +80,15 @@ Minimum zaroori: `server.js` + `config.json`.
 
 ### 3) Printer config
 
-`config.json` edit karo (Notepad):
+**USB (Bixolon etc.)** — upar wala `transport: "com"` use karo.
+
+**Network / Ethernet printer** ke liye:
 
 ```json
 {
   "listenHost": "127.0.0.1",
   "listenPort": 9191,
+  "transport": "tcp",
   "printerHost": "192.168.1.50",
   "printerPort": 9100,
   "drawerPin": 0,
@@ -59,12 +99,11 @@ Minimum zaroori: `server.js` + `config.json`.
 
 | Field | Matlab |
 |-------|--------|
-| `printerHost` | Is counter ki thermal printer ka LAN IP (USB-only printers ke liye aksar printer software / raw TCP enable karna padta hai) |
-| `printerPort` | Raw print port — aksar **9100** |
-| `listenPort` | Bridge HTTP — default **9191** (POS isi pe call karti hai) |
+| `transport` | `"com"` = USB Virtual COM · `"tcp"` = LAN printer :9100 |
+| `comPort` | Windows COM number (`COM3`) — USB ke liye |
+| `printerHost` / `printerPort` | Sirf `transport: "tcp"` pe |
+| `listenPort` | Bridge HTTP — default **9191** |
 | Drawer | RJ11 cable **printer** pe lagi honi chahiye |
-
-`printerHost` ko `127.0.0.1` mat chhoro jab tak printer isi PC pe raw TCP se na sun raha ho.
 
 ### 4) Bridge chalao
 
@@ -79,8 +118,10 @@ Success pe kuch aisa dikhe:
 
 ```text
 [gpos-print-bridge] listening http://127.0.0.1:9191
-[gpos-print-bridge] printer 192.168.1.50:9100
+[gpos-print-bridge] printer COM COM3
 ```
+
+(ya TCP mode mein `printer TCP 192.168.1.50:9100`)
 
 **Yeh window band mat karo** jab tak POS use ho — band hua to drawer nahi khulega.
 
@@ -155,7 +196,8 @@ Default: `http://127.0.0.1:9191`
 |---------|--------|
 | Browser mein `127.0.0.1:9191/health` OK, lekin Settings pe **Offline** | POS `https://gondaltrader.com` se chalti hai — Chrome HTTPS → localhost block / permission maangta hai. Settings pe **Test drawer** dabao; agar prompt aaye to **Allow**. Bridge restart: naya `server.js` (PNA headers). DevTools → Console mein CORS / Private Network error? |
 | POS: *Print bridge offline* | Is PC pe `node server.js` chal raha hai? Health URL open hoti hai? |
-| Bridge OK, drawer nahi khulta | `printerHost` sahi? Printer raw **9100** sun raha? Drawer RJ11 printer pe? |
+| Bridge OK, drawer nahi / ECONNREFUSED :9100 | USB printer pe TCP mat use karo — `transport: "com"` + sahi `comPort` |
+| COM write fail | Device Manager se COM number; Bixolon VCOM on; `drawerPin` 0 phir 1 try karo |
 | Galat counter ka drawer | Har PC ki apni `config.json` / apna bridge |
 | Port busy | Koi aur app `9191` use to nahi kar rahi |
 

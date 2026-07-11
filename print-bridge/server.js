@@ -8,7 +8,11 @@
  *
  * Default: http://127.0.0.1:9191
  *   GET  /health
- *   POST /drawer   → ESC/POS drawer open via printer TCP :9100
+ *   POST /drawer
+ *
+ * Transports (config.json "transport"):
+ *   "tcp"  — network printer raw port (default :9100)
+ *   "com"  — USB printers via Windows Virtual COM (Bixolon SRP-352+ etc.)
  */
 
 const http = require("http");
@@ -20,8 +24,12 @@ const configPath = path.join(__dirname, "config.json");
 const defaults = {
   listenHost: "127.0.0.1",
   listenPort: 9191,
+  /** "tcp" | "com" */
+  transport: "tcp",
   printerHost: "127.0.0.1",
   printerPort: 9100,
+  /** Windows USB / Virtual COM — e.g. "COM3" (Device Manager se dekho) */
+  comPort: "COM3",
   drawerPin: 0,
   drawerOnMs: 25,
   drawerOffMs: 250,
@@ -36,7 +44,15 @@ function loadConfig() {
   }
 }
 
-/** Standard ESC/POS cash drawer pulse (most Epson-compatible thermals). */
+function printerLabel(cfg) {
+  const transport = String(cfg.transport || "tcp").toLowerCase();
+  if (transport === "com" || transport === "serial") {
+    return `COM ${cfg.comPort || "COM3"}`;
+  }
+  return `TCP ${cfg.printerHost}:${cfg.printerPort}`;
+}
+
+/** Standard ESC/POS cash drawer pulse (Epson-compatible; Bixolon bhi yehi use karta hai). */
 function drawerKickBuffer(cfg) {
   const pin = Number(cfg.drawerPin) === 1 ? 1 : 0;
   const on = Math.max(1, Math.min(255, Number(cfg.drawerOnMs) || 25));
@@ -44,7 +60,7 @@ function drawerKickBuffer(cfg) {
   return Buffer.from([0x1b, 0x70, pin, on, off]);
 }
 
-function sendToPrinter(cfg, payload) {
+function sendViaTcp(cfg, payload) {
   return new Promise((resolve, reject) => {
     const socket = net.connect(
       { host: cfg.printerHost, port: Number(cfg.printerPort), timeout: 4000 },
@@ -63,9 +79,56 @@ function sendToPrinter(cfg, payload) {
     socket.on("error", reject);
     socket.on("timeout", () => {
       socket.destroy();
-      reject(new Error("Printer connection timeout"));
+      reject(new Error("Printer TCP connection timeout"));
     });
   });
+}
+
+/**
+ * Windows Virtual COM / USB serial (\\\\.\\COM3).
+ * Linux: set comPort to "/dev/ttyUSB0" etc.
+ */
+function sendViaCom(cfg, payload) {
+  return new Promise((resolve, reject) => {
+    const raw = String(cfg.comPort || "COM3").trim();
+    if (!raw) {
+      reject(new Error('comPort missing — config.json mein "COM3" jaisa port likho'));
+      return;
+    }
+
+    let devicePath = raw;
+    if (process.platform === "win32") {
+      // COM3 → \\.\COM3
+      if (!raw.startsWith("\\\\.\\") && !raw.startsWith("/")) {
+        devicePath = `\\\\.\\${raw.toUpperCase().startsWith("COM") ? raw.toUpperCase() : raw}`;
+      }
+    }
+
+    try {
+      const fd = fs.openSync(devicePath, "w");
+      try {
+        fs.writeSync(fd, payload);
+      } finally {
+        fs.closeSync(fd);
+      }
+      resolve();
+    } catch (err) {
+      const msg = err?.message || String(err);
+      reject(
+        new Error(
+          `COM write fail (${devicePath}): ${msg}. Device Manager → Ports (COM & LPT) se sahi COM number check karo. Bixolon driver mein Virtual Serial Port on hona chahiye.`,
+        ),
+      );
+    }
+  });
+}
+
+function sendToPrinter(cfg, payload) {
+  const transport = String(cfg.transport || "tcp").toLowerCase();
+  if (transport === "com" || transport === "serial") {
+    return sendViaCom(cfg, payload);
+  }
+  return sendViaTcp(cfg, payload);
 }
 
 function corsHeaders(extra = {}) {
@@ -73,8 +136,6 @@ function corsHeaders(extra = {}) {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Accept",
-    // Chrome Private Network Access / Local Network Access:
-    // https://gondaltrader.com (public HTTPS) → http://127.0.0.1:9191
     "Access-Control-Allow-Private-Network": "true",
     ...extra,
   };
@@ -105,7 +166,8 @@ const server = http.createServer(async (req, res) => {
     json(res, 200, {
       ok: true,
       service: "gpos-print-bridge",
-      printer: `${cfg.printerHost}:${cfg.printerPort}`,
+      transport: String(cfg.transport || "tcp").toLowerCase(),
+      printer: printerLabel(cfg),
     });
     return;
   }
@@ -113,12 +175,15 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "POST" && url.pathname === "/drawer") {
     try {
       await sendToPrinter(cfg, drawerKickBuffer(cfg));
-      json(res, 200, { ok: true, message: "Drawer kick sent" });
+      json(res, 200, {
+        ok: true,
+        message: `Drawer kick sent (${printerLabel(cfg)})`,
+      });
     } catch (err) {
       json(res, 502, {
         ok: false,
         message: err?.message || "Printer/drawer unreachable",
-        printer: `${cfg.printerHost}:${cfg.printerPort}`,
+        printer: printerLabel(cfg),
       });
     }
     return;
@@ -129,6 +194,6 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(Number(cfg.listenPort), cfg.listenHost, () => {
   console.log(`[gpos-print-bridge] listening http://${cfg.listenHost}:${cfg.listenPort}`);
-  console.log(`[gpos-print-bridge] printer ${cfg.printerHost}:${cfg.printerPort}`);
+  console.log(`[gpos-print-bridge] printer ${printerLabel(cfg)}`);
   console.log(`[gpos-print-bridge] POST /drawer to open cash drawer`);
 });
