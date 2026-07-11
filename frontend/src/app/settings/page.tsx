@@ -1,13 +1,30 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import { KeyRound, MonitorCog, Pencil, ShieldCheck, Store, UserPlus, X } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Download,
+  KeyRound,
+  MonitorCog,
+  Pencil,
+  ShieldCheck,
+  Store,
+  Upload,
+  UserPlus,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AppToast, useAppToast } from "@/components/ui/app-toast";
 import { SearchInput } from "@/components/ui/search-input";
 import { FilterChips } from "@/components/ui/filter-chips";
-import { getUsersSettings, updateUserPassword } from "@/lib/admin-api";
+import {
+  downloadDatabaseBackup,
+  getUsersSettings,
+  importDatabaseBackup,
+  updateUserPassword,
+} from "@/lib/admin-api";
 import { getErrorMessage } from "@/lib/api";
+import { logout } from "@/lib/auth";
+import { appHref } from "@/lib/app-path";
 import { checkPrintBridge, printBridgeBase } from "@/lib/print-bridge";
 import { UserFormModal } from "@/features/admin/components/AdminActionModals";
 import { ModalPortal } from "@/components/ui/modal-portal";
@@ -25,6 +42,124 @@ const ROLES = ["All", "owner", "manager", "cashier"] as const;
 type SettingsData = Awaited<ReturnType<typeof getUsersSettings>>;
 type UserRow = SettingsData["data"][number];
 
+function ImportBackupModal({
+  onClose,
+  onDone,
+}: {
+  onClose: () => void;
+  onDone: (message: string) => void;
+}) {
+  useModalDismiss(onClose, { escape: false });
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [confirm, setConfirm] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    if (!file) {
+      setError("Pehle backup .json file select karo.");
+      return;
+    }
+    if (confirm.trim() !== "RESTORE") {
+      setError("Confirm box mein exactly RESTORE likho (sab caps).");
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await importDatabaseBackup(file, confirm.trim());
+      onDone(res.message);
+      onClose();
+      // Tokens wipe — force re-login
+      window.setTimeout(() => {
+        logout();
+        window.location.href = appHref("/login");
+      }, 1200);
+    } catch (err) {
+      setError(getErrorMessage(err, "Import fail. File / confirm check karo."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <ModalPortal>
+      <div className="fixed inset-0 z-[100] overflow-y-auto bg-black/50 p-4 py-8 backdrop-blur-sm">
+        <div className="flex min-h-full items-center justify-center">
+          <form
+            onSubmit={onSubmit}
+            className="w-full max-w-md rounded-xl border border-border/80 bg-card p-5 shadow-xl"
+          >
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-black text-foreground">Import backup</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Yeh current database ko replace kar dega. Pehle export zaroor lo.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                  Backup file (.json)
+                </span>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept=".json,application/json"
+                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                  className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-bold file:text-primary-foreground"
+                />
+                {file && (
+                  <p className="mt-1 truncate text-xs text-muted-foreground">{file.name}</p>
+                )}
+              </label>
+
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                  Type RESTORE to confirm
+                </span>
+                <input
+                  value={confirm}
+                  onChange={(e) => setConfirm(e.target.value)}
+                  autoComplete="off"
+                  placeholder="RESTORE"
+                  className="h-11 w-full rounded-md border border-border bg-input px-3 text-sm font-semibold outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
+                />
+              </label>
+
+              {error && (
+                <p className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm font-bold text-danger">
+                  {error}
+                </p>
+              )}
+            </div>
+
+            <div className="mt-5 flex gap-2">
+              <Button type="button" variant="secondary" className="flex-1" onClick={onClose} disabled={busy}>
+                Cancel
+              </Button>
+              <Button type="submit" className="flex-1" disabled={busy}>
+                {busy ? "Restoring…" : "Restore database"}
+              </Button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </ModalPortal>
+  );
+}
 function ResetPasswordModal({
   user,
   onClose,
@@ -146,6 +281,8 @@ export default function SettingsPage() {
   const [editUser, setEditUser] = useState<UserRow | null>(null);
   const [showAddUser, setShowAddUser] = useState(false);
   const [bridge, setBridge] = useState<{ ok: boolean; printer?: string } | null>(null);
+  const [showImportBackup, setShowImportBackup] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   function loadUsers() {
     getUsersSettings()
@@ -267,6 +404,49 @@ export default function SettingsPage() {
               {" · "}Sale pe drawer auto-open · Receipt sirf Print button se
             </p>
           </PagePanel>
+
+          <PagePanel>
+            <PanelHeader
+              title="Database backup"
+              meta="Full export / import — users, stock, sales, khata, sab"
+            />
+            <div className="space-y-3 p-4">
+              <p className="text-sm text-muted-foreground">
+                Export se complete JSON backup download hota hai. Import se current DB replace ho jati hai
+                (destructive) — pehle export zaroor lo.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={exporting}
+                  onClick={async () => {
+                    setExporting(true);
+                    try {
+                      await downloadDatabaseBackup();
+                      showToast("Backup download ho gaya.", "success");
+                    } catch (err) {
+                      showToast(getErrorMessage(err, "Export fail."), "error");
+                    } finally {
+                      setExporting(false);
+                    }
+                  }}
+                >
+                  <Download className="h-4 w-4" />
+                  {exporting ? "Exporting…" : "Export database"}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => setShowImportBackup(true)}
+                >
+                  <Upload className="h-4 w-4" />
+                  Import backup
+                </Button>
+              </div>
+            </div>
+          </PagePanel>
         </div>
 
         <div className="grid gap-4">
@@ -344,6 +524,13 @@ export default function SettingsPage() {
             showToast(msg, "success");
             loadUsers();
           }}
+        />
+      )}
+
+      {showImportBackup && (
+        <ImportBackupModal
+          onClose={() => setShowImportBackup(false)}
+          onDone={(msg) => showToast(msg, "success")}
         />
       )}
     </AdminShell>

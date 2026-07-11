@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Auth\Http\Controllers\AuthController;
+use App\Modules\Auth\Http\Controllers\BackupController;
 use App\Modules\Auth\Http\Controllers\SettingsController;
 use App\Modules\Auth\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
@@ -27,4 +28,9 @@ Route::middleware(['auth:sanctum', 'role:owner'])->prefix('users')->group(functi
 Route::middleware('auth:sanctum')->prefix('settings')->group(function () {
     Route::get('/receipt', [SettingsController::class, 'receipt']);
     Route::put('/receipt', [SettingsController::class, 'updateReceipt'])->middleware('role:owner');
+
+    Route::middleware('role:owner')->group(function () {
+        Route::get('/backup/export', [BackupController::class, 'export']);
+        Route::post('/backup/import', [BackupController::class, 'import']);
+    });
 });

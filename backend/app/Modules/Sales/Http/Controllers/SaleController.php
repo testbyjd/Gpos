@@ -30,6 +30,10 @@ class SaleController extends Controller
                         ->orWhereHas('customer', function ($c) use ($term) {
                             $c->where('name', 'like', '%'.$term.'%')
                                 ->orWhere('phone', 'like', '%'.$term.'%');
+                        })
+                        ->orWhereHas('lines.product', function ($p) use ($term) {
+                            $p->where('name', 'like', '%'.$term.'%')
+                                ->orWhere('barcode', 'like', '%'.$term.'%');
                         });
                 });
             })

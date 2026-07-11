@@ -89,7 +89,7 @@ export function PosReturnModal({ onClose, onReturned }: Props) {
               <h2 id="pos-return-title" className="text-base font-black text-foreground">
                 Customer return
               </h2>
-              <p className="text-xs text-muted-foreground">Invoice / customer se bill dhoondo</p>
+              <p className="text-xs text-muted-foreground">Invoice / customer / product se bill dhoondo</p>
             </div>
           </div>
           <button
@@ -115,7 +115,7 @@ export function PosReturnModal({ onClose, onReturned }: Props) {
                   void load(query);
                 }
               }}
-              placeholder="INV-… / customer naam / phone"
+              placeholder="INV-… / customer / product naam / barcode"
               className="h-11 w-full rounded-lg border border-border bg-input pl-10 pr-3 text-sm font-semibold outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
             />
           </div>
@@ -154,7 +154,7 @@ export function PosReturnModal({ onClose, onReturned }: Props) {
             <p className="py-10 text-center text-sm text-muted-foreground">Loading bills…</p>
           ) : rows.length === 0 ? (
             <p className="py-10 text-center text-sm text-muted-foreground">
-              Koi bill nahi mila — invoice number try karo.
+              Koi bill nahi mila — invoice, customer, ya product naam try karo.
             </p>
           ) : (
             <ul className="space-y-1.5">

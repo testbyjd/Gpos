@@ -1,4 +1,4 @@
-import { apiFetch, apiUpload } from "./api";
+import { API_BASE, ApiError, apiFetch, apiUpload } from "./api";
 import { barcodesEqual } from "./barcode";
 
 export interface ProductRow {
@@ -621,6 +621,54 @@ export function updateReceiptSettings(data: ReceiptSettings) {
     method: "PUT",
     body: JSON.stringify(data),
   });
+}
+
+/** Download full DB backup JSON (owner). Triggers browser save dialog. */
+export async function downloadDatabaseBackup(): Promise<void> {
+  const token =
+    typeof window !== "undefined" ? window.localStorage.getItem("gpos.auth.token") : null;
+  const res = await fetch(`${API_BASE}/settings/backup/export`, {
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    let msg = "Backup download fail.";
+    try {
+      const parsed = JSON.parse(body) as { message?: string };
+      if (typeof parsed.message === "string" && parsed.message.trim()) msg = parsed.message.trim();
+    } catch {
+      /* keep default */
+    }
+    throw new ApiError(res.status, msg);
+  }
+  const blob = await res.blob();
+  const cd = res.headers.get("Content-Disposition") ?? "";
+  const match = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(cd);
+  const filename = match
+    ? match[1].replace(/['"]/g, "")
+    : `gpos-backup-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.json`;
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+export function importDatabaseBackup(file: File, confirm: string) {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("confirm", confirm);
+  return apiUpload<{
+    ok: boolean;
+    message: string;
+    data: { tables_restored: string[]; row_counts: Record<string, number> };
+  }>("/settings/backup/import", form);
 }
 
 export function getUsersSettings() {
