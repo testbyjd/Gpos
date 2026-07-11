@@ -68,15 +68,25 @@ function sendToPrinter(cfg, payload) {
   });
 }
 
-function json(res, status, body) {
-  const data = JSON.stringify(body);
-  res.writeHead(status, {
-    "Content-Type": "application/json",
-    "Content-Length": Buffer.byteLength(data),
+function corsHeaders(extra = {}) {
+  return {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type, Accept",
+    // Chrome Private Network Access / Local Network Access:
+    // https://gondaltrader.com (public HTTPS) → http://127.0.0.1:9191
+    "Access-Control-Allow-Private-Network": "true",
+    ...extra,
+  };
+}
+
+function json(res, status, body) {
+  const data = JSON.stringify(body);
+  const headers = corsHeaders({
+    "Content-Type": "application/json",
+    "Content-Length": Buffer.byteLength(data),
   });
+  res.writeHead(status, headers);
   res.end(data);
 }
 
@@ -84,11 +94,7 @@ const cfg = loadConfig();
 
 const server = http.createServer(async (req, res) => {
   if (req.method === "OPTIONS") {
-    res.writeHead(204, {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
-    });
+    res.writeHead(204, corsHeaders());
     res.end();
     return;
   }

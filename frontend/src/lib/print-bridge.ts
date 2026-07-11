@@ -1,6 +1,9 @@
 /**
  * Local print-bridge client (cash drawer).
  * Bridge must be running on the register PC — see /print-bridge.
+ *
+ * POS is HTTPS (gondaltrader.com); bridge is http://127.0.0.1 — browsers
+ * may prompt for local/loopback network permission and/or require PNA headers.
  */
 
 const DEFAULT_BRIDGE = "http://127.0.0.1:9191";
@@ -14,17 +17,30 @@ export type DrawerKickResult =
   | { ok: true; message?: string }
   | { ok: false; message: string; offline?: boolean };
 
+/** fetch() options for HTTPS page → local loopback bridge. */
+function bridgeFetchInit(init: RequestInit = {}): RequestInit {
+  return {
+    ...init,
+    // Chrome Local Network Access — HTTPS site talking to 127.0.0.1
+    // (typed loosely; not all TS lib versions include this yet)
+    ...({ targetAddressSpace: "loopback" } as RequestInit),
+  };
+}
+
 /** Open cash drawer via local bridge. Never throws — safe to fire-and-forget. */
 export async function openCashDrawer(): Promise<DrawerKickResult> {
   const base = printBridgeBase();
   try {
     const ctrl = new AbortController();
     const timer = window.setTimeout(() => ctrl.abort(), 2500);
-    const res = await fetch(`${base}/drawer`, {
-      method: "POST",
-      headers: { Accept: "application/json" },
-      signal: ctrl.signal,
-    });
+    const res = await fetch(
+      `${base}/drawer`,
+      bridgeFetchInit({
+        method: "POST",
+        headers: { Accept: "application/json" },
+        signal: ctrl.signal,
+      }),
+    );
     window.clearTimeout(timer);
     const body = (await res.json().catch(() => ({}))) as { ok?: boolean; message?: string };
     if (!res.ok || body.ok === false) {
@@ -38,7 +54,8 @@ export async function openCashDrawer(): Promise<DrawerKickResult> {
     return {
       ok: false,
       offline: true,
-      message: "Print bridge offline — drawer open nahi hua (node print-bridge/server.js chalao).",
+      message:
+        "Print bridge offline — Windows pe node server.js chalao, phir Chrome permission Allow karo (local network / 127.0.0.1).",
     };
   }
 }
@@ -48,7 +65,7 @@ export async function checkPrintBridge(): Promise<{ ok: boolean; printer?: strin
   try {
     const ctrl = new AbortController();
     const timer = window.setTimeout(() => ctrl.abort(), 1500);
-    const res = await fetch(`${base}/health`, { signal: ctrl.signal });
+    const res = await fetch(`${base}/health`, bridgeFetchInit({ signal: ctrl.signal }));
     window.clearTimeout(timer);
     if (!res.ok) return { ok: false };
     const body = (await res.json()) as { ok?: boolean; printer?: string };

@@ -10,6 +10,7 @@ import {
   Store,
   Upload,
   UserPlus,
+  Wallet,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,7 @@ import {
 import { getErrorMessage } from "@/lib/api";
 import { logout } from "@/lib/auth";
 import { appHref } from "@/lib/app-path";
-import { checkPrintBridge, printBridgeBase } from "@/lib/print-bridge";
+import { checkPrintBridge, openCashDrawer, printBridgeBase } from "@/lib/print-bridge";
 import { UserFormModal } from "@/features/admin/components/AdminActionModals";
 import { ModalPortal } from "@/components/ui/modal-portal";
 import { useModalDismiss } from "@/lib/hooks/useModalDismiss";
@@ -283,6 +284,7 @@ export default function SettingsPage() {
   const [bridge, setBridge] = useState<{ ok: boolean; printer?: string } | null>(null);
   const [showImportBackup, setShowImportBackup] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [testingDrawer, setTestingDrawer] = useState(false);
 
   function loadUsers() {
     getUsersSettings()
@@ -399,10 +401,36 @@ export default function SettingsPage() {
                 ]),
               ]}
             />
-            <p className="border-t border-border/80 px-4 py-3 text-xs text-muted-foreground">
-              Register PC: <code className="rounded bg-muted px-1">node print-bridge/server.js</code>
-              {" · "}Sale pe drawer auto-open · Receipt sirf Print button se
-            </p>
+            <div className="flex flex-wrap items-center gap-2 border-t border-border/80 px-4 py-3">
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={testingDrawer}
+                onClick={async () => {
+                  setTestingDrawer(true);
+                  try {
+                    const res = await openCashDrawer();
+                    if (res.ok) {
+                      showToast(res.message || "Drawer kick bhej diya — drawer open hona chahiye.", "success");
+                      checkPrintBridge().then(setBridge);
+                    } else {
+                      showToast(res.message, "error");
+                      checkPrintBridge().then(setBridge);
+                    }
+                  } finally {
+                    setTestingDrawer(false);
+                  }
+                }}
+              >
+                <Wallet className="h-4 w-4" />
+                {testingDrawer ? "Testing…" : "Test drawer"}
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Register PC: <code className="rounded bg-muted px-1">node print-bridge/server.js</code>
+                {" · "}Sale pe drawer auto-open · Receipt sirf Print button se
+              </p>
+            </div>
           </PagePanel>
 
           <PagePanel>

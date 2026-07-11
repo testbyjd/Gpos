@@ -153,9 +153,17 @@ Default: `http://127.0.0.1:9191`
 
 | Problem | Check |
 |---------|--------|
+| Browser mein `127.0.0.1:9191/health` OK, lekin Settings pe **Offline** | POS `https://gondaltrader.com` se chalti hai — Chrome HTTPS → localhost block / permission maangta hai. Settings pe **Test drawer** dabao; agar prompt aaye to **Allow**. Bridge restart: naya `server.js` (PNA headers). DevTools → Console mein CORS / Private Network error? |
 | POS: *Print bridge offline* | Is PC pe `node server.js` chal raha hai? Health URL open hoti hai? |
 | Bridge OK, drawer nahi khulta | `printerHost` sahi? Printer raw **9100** sun raha? Drawer RJ11 printer pe? |
 | Galat counter ka drawer | Har PC ki apni `config.json` / apna bridge |
 | Port busy | Koi aur app `9191` use to nahi kar rahi |
+
+### Chrome permission (important)
+
+Address bar pe seedha `http://127.0.0.1:9191` open karna alag baat hai — yeh Settings wala fetch nahi.  
+`gondaltrader.com` pe Settings / sale pe pehli dafa Chrome puch sakta hai: **local network / loopback** allow? → **Allow** choose karo.
+
+Agar pehle Deny kar diya: site settings → Local network / Insecure content → Allow, ya site data clear karke dobara try.
 
 Linux / Mac pe bhi same: folder mein `node server.js`.
