@@ -14,40 +14,42 @@ Server (VPS) pe print-bridge **nahi** chalana.
 
 ---
 
-## Bixolon SRP-352+ (USB) — important
+## Bixolon SRP-352+ / SRP-352plusIII (USB) — important
 
-Yeh **USB** printer hai. Iska matlab:
+Tumhari screenshot jaisi setup:
 
-- Network port **9100** pe kuch nahi chalta  
-- `127.0.0.1:9100` → **ECONNREFUSED** normal hai (galat transport)  
-- Drawer printer ke RJ11 se juda hota hai; bridge ko printer tak ESC/POS **COM port** se bhejna hota hai  
+- Port = **USB001** (Windows printer queue)  
+- **COM1–COM4** listed hain lekin printer un pe nahi — is liye `transport: "com"` kaam nahi karega  
+- Network **9100** bhi nahi — USB pe `ECONNREFUSED :9100` normal hai  
 
-### Steps
-
-1. Bixolon Windows driver / Unified Driver install karo (official site)  
-2. Driver settings mein **Virtual Serial Port (VCOM)** enable karo agar option ho  
-3. **Device Manager** → **Ports (COM & LPT)** → dekho kaunsa COM hai, e.g. `COM3` / `COM4` (Bixolon / USB Serial)  
-4. `config.json` aisa rakho:
+**Sahi config:** Windows printer **exact name** se RAW ESC/POS bhejo:
 
 ```json
 {
   "listenHost": "127.0.0.1",
   "listenPort": 9191,
-  "transport": "com",
-  "comPort": "COM3",
+  "transport": "winspool",
+  "windowsPrinter": "BIXOLON SRP-352plusIII",
   "drawerPin": 0,
   "drawerOnMs": 25,
   "drawerOffMs": 250
 }
 ```
 
-`COM3` ko Device Manager wale number se replace karo.
+`windowsPrinter` = Devices and Printers mein jo naam dikhta hai (case/spacing same).
 
-5. Bridge restart: `node server.js`  
-6. Console mein dikhna chahiye: `printer COM COM3`  
-7. POS Settings → **Test drawer**
+Phir:
 
-Agar COM write fail: galat COM number, printer band, ya VCOM off. `drawerPin` `0` try karo, phir `1`.
+```bat
+cd C:\gpos\print-bridge
+node server.js
+```
+
+Console: `printer Windows "BIXOLON SRP-352plusIII"`  
+POS Settings → **Test drawer**
+
+Drawer RJ11 se **printer** pe laga hona chahiye.  
+Agar kick na aaye: `drawerPin` ko `1` try karo.
 
 ---
 
@@ -80,7 +82,9 @@ Minimum zaroori: `server.js` + `config.json`.
 
 ### 3) Printer config
 
-**USB (Bixolon etc.)** — upar wala `transport: "com"` use karo.
+**USB Bixolon (USB001)** — `transport: "winspool"` (upar).
+
+**Virtual COM** (agar driver COM banaye) — `transport: "com"`.
 
 **Network / Ethernet printer** ke liye:
 
@@ -99,8 +103,9 @@ Minimum zaroori: `server.js` + `config.json`.
 
 | Field | Matlab |
 |-------|--------|
-| `transport` | `"com"` = USB Virtual COM · `"tcp"` = LAN printer :9100 |
-| `comPort` | Windows COM number (`COM3`) — USB ke liye |
+| `transport` | `"winspool"` = Windows USB queue · `"com"` = Virtual COM · `"tcp"` = LAN :9100 |
+| `windowsPrinter` | Devices and Printers ka exact naam (USB001 wale ke liye) |
+| `comPort` | Sirf `transport: "com"` pe (`COM3`) |
 | `printerHost` / `printerPort` | Sirf `transport: "tcp"` pe |
 | `listenPort` | Bridge HTTP — default **9191** |
 | Drawer | RJ11 cable **printer** pe lagi honi chahiye |
@@ -118,10 +123,8 @@ Success pe kuch aisa dikhe:
 
 ```text
 [gpos-print-bridge] listening http://127.0.0.1:9191
-[gpos-print-bridge] printer COM COM3
+[gpos-print-bridge] printer Windows "BIXOLON SRP-352plusIII"
 ```
-
-(ya TCP mode mein `printer TCP 192.168.1.50:9100`)
 
 **Yeh window band mat karo** jab tak POS use ho — band hua to drawer nahi khulega.
 

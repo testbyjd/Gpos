@@ -11,25 +11,29 @@
  *   POST /drawer
  *
  * Transports (config.json "transport"):
- *   "tcp"  — network printer raw port (default :9100)
- *   "com"  — USB printers via Windows Virtual COM (Bixolon SRP-352+ etc.)
+ *   "tcp"      — network printer raw port (:9100)
+ *   "com"      — Virtual COM / serial (\\\\.\\COM3)
+ *   "winspool" — Windows USB printer by name (USB001 / Bixolon driver) ★ recommended for SRP-352+
  */
 
 const http = require("http");
 const net = require("net");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
+const { spawn } = require("child_process");
 
 const configPath = path.join(__dirname, "config.json");
 const defaults = {
   listenHost: "127.0.0.1",
   listenPort: 9191,
-  /** "tcp" | "com" */
-  transport: "tcp",
+  /** "tcp" | "com" | "winspool" */
+  transport: "winspool",
   printerHost: "127.0.0.1",
   printerPort: 9100,
-  /** Windows USB / Virtual COM — e.g. "COM3" (Device Manager se dekho) */
   comPort: "COM3",
+  /** Exact name from Windows "Devices and Printers" */
+  windowsPrinter: "BIXOLON SRP-352plusIII",
   drawerPin: 0,
   drawerOnMs: 25,
   drawerOffMs: 250,
@@ -46,13 +50,16 @@ function loadConfig() {
 
 function printerLabel(cfg) {
   const transport = String(cfg.transport || "tcp").toLowerCase();
+  if (transport === "winspool" || transport === "windows" || transport === "usb") {
+    return `Windows "${cfg.windowsPrinter || "printer"}"`;
+  }
   if (transport === "com" || transport === "serial") {
     return `COM ${cfg.comPort || "COM3"}`;
   }
   return `TCP ${cfg.printerHost}:${cfg.printerPort}`;
 }
 
-/** Standard ESC/POS cash drawer pulse (Epson-compatible; Bixolon bhi yehi use karta hai). */
+/** Standard ESC/POS cash drawer pulse (Epson-compatible; Bixolon bhi yehi). */
 function drawerKickBuffer(cfg) {
   const pin = Number(cfg.drawerPin) === 1 ? 1 : 0;
   const on = Math.max(1, Math.min(255, Number(cfg.drawerOnMs) || 25));
@@ -84,21 +91,16 @@ function sendViaTcp(cfg, payload) {
   });
 }
 
-/**
- * Windows Virtual COM / USB serial (\\\\.\\COM3).
- * Linux: set comPort to "/dev/ttyUSB0" etc.
- */
 function sendViaCom(cfg, payload) {
   return new Promise((resolve, reject) => {
     const raw = String(cfg.comPort || "COM3").trim();
     if (!raw) {
-      reject(new Error('comPort missing — config.json mein "COM3" jaisa port likho'));
+      reject(new Error('comPort missing — config.json mein "COM3" likho'));
       return;
     }
 
     let devicePath = raw;
     if (process.platform === "win32") {
-      // COM3 → \\.\COM3
       if (!raw.startsWith("\\\\.\\") && !raw.startsWith("/")) {
         devicePath = `\\\\.\\${raw.toUpperCase().startsWith("COM") ? raw.toUpperCase() : raw}`;
       }
@@ -113,18 +115,153 @@ function sendViaCom(cfg, payload) {
       }
       resolve();
     } catch (err) {
-      const msg = err?.message || String(err);
       reject(
         new Error(
-          `COM write fail (${devicePath}): ${msg}. Device Manager → Ports (COM & LPT) se sahi COM number check karo. Bixolon driver mein Virtual Serial Port on hona chahiye.`,
+          `COM write fail (${devicePath}): ${err?.message || err}. USB001 printer pe COM nahi — transport "winspool" use karo.`,
         ),
       );
     }
   });
 }
 
+/**
+ * Send RAW bytes to a Windows printer queue (USB001 / Bixolon driver name).
+ * Uses winspool WritePrinter via PowerShell — no Virtual COM needed.
+ */
+function sendViaWinSpool(cfg, payload) {
+  return new Promise((resolve, reject) => {
+    if (process.platform !== "win32") {
+      reject(new Error('transport "winspool" sirf Windows pe chalega'));
+      return;
+    }
+
+    const printerName = String(cfg.windowsPrinter || "").trim();
+    if (!printerName) {
+      reject(new Error('windowsPrinter missing — Devices and Printers se exact naam likho'));
+      return;
+    }
+
+    const tmp = path.join(os.tmpdir(), `gpos-drawer-${process.pid}-${Date.now()}.bin`);
+    try {
+      fs.writeFileSync(tmp, payload);
+    } catch (err) {
+      reject(err);
+      return;
+    }
+
+    const printerEscaped = printerName.replace(/'/g, "''");
+    const tmpEscaped = tmp.replace(/'/g, "''");
+
+    const psScript = `
+$ErrorActionPreference = 'Stop'
+$printerName = '${printerEscaped}'
+$filePath = '${tmpEscaped}'
+$bytes = [System.IO.File]::ReadAllBytes($filePath)
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public class GposRawPrinter {
+  [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
+  public class DOCINFOA {
+    [MarshalAs(UnmanagedType.LPStr)] public string pDocName;
+    [MarshalAs(UnmanagedType.LPStr)] public string pOutputFile;
+    [MarshalAs(UnmanagedType.LPStr)] public string pDataType;
+  }
+  [DllImport("winspool.drv", EntryPoint = "OpenPrinterA", SetLastError = true, CharSet = CharSet.Ansi)]
+  public static extern bool OpenPrinter([MarshalAs(UnmanagedType.LPStr)] string szPrinter, out IntPtr hPrinter, IntPtr pd);
+  [DllImport("winspool.drv", EntryPoint = "ClosePrinter", SetLastError = true)]
+  public static extern bool ClosePrinter(IntPtr hPrinter);
+  [DllImport("winspool.drv", EntryPoint = "StartDocPrinterA", SetLastError = true, CharSet = CharSet.Ansi)]
+  public static extern bool StartDocPrinter(IntPtr hPrinter, Int32 level, [In] DOCINFOA di);
+  [DllImport("winspool.drv", EntryPoint = "EndDocPrinter", SetLastError = true)]
+  public static extern bool EndDocPrinter(IntPtr hPrinter);
+  [DllImport("winspool.drv", EntryPoint = "StartPagePrinter", SetLastError = true)]
+  public static extern bool StartPagePrinter(IntPtr hPrinter);
+  [DllImport("winspool.drv", EntryPoint = "EndPagePrinter", SetLastError = true)]
+  public static extern bool EndPagePrinter(IntPtr hPrinter);
+  [DllImport("winspool.drv", EntryPoint = "WritePrinter", SetLastError = true)]
+  public static extern bool WritePrinter(IntPtr hPrinter, IntPtr pBytes, Int32 dwCount, out Int32 dwWritten);
+  public static string SendBytes(string printerName, byte[] data) {
+    IntPtr hPrinter = IntPtr.Zero;
+    if (!OpenPrinter(printerName, out hPrinter, IntPtr.Zero)) {
+      return "OpenPrinter failed (check printer name): " + printerName + " err=" + Marshal.GetLastWin32Error();
+    }
+    var di = new DOCINFOA();
+    di.pDocName = "GPOS Drawer Kick";
+    di.pDataType = "RAW";
+    if (!StartDocPrinter(hPrinter, 1, di)) {
+      int e = Marshal.GetLastWin32Error();
+      ClosePrinter(hPrinter);
+      return "StartDocPrinter failed err=" + e;
+    }
+    StartPagePrinter(hPrinter);
+    IntPtr p = Marshal.AllocHGlobal(data.Length);
+    Marshal.Copy(data, 0, p, data.Length);
+    int written = 0;
+    bool ok = WritePrinter(hPrinter, p, data.Length, out written);
+    int we = Marshal.GetLastWin32Error();
+    Marshal.FreeHGlobal(p);
+    EndPagePrinter(hPrinter);
+    EndDocPrinter(hPrinter);
+    ClosePrinter(hPrinter);
+    if (!ok) return "WritePrinter failed err=" + we;
+    return "OK written=" + written;
+  }
+}
+"@
+$result = [GposRawPrinter]::SendBytes($printerName, $bytes)
+Write-Output $result
+if (-not $result.StartsWith('OK')) { exit 1 }
+`;
+
+    const child = spawn(
+      "powershell.exe",
+      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", psScript],
+      { windowsHide: true },
+    );
+
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (d) => {
+      stdout += d.toString();
+    });
+    child.stderr.on("data", (d) => {
+      stderr += d.toString();
+    });
+    child.on("error", (err) => {
+      try {
+        fs.unlinkSync(tmp);
+      } catch {
+        /* ignore */
+      }
+      reject(err);
+    });
+    child.on("close", (code) => {
+      try {
+        fs.unlinkSync(tmp);
+      } catch {
+        /* ignore */
+      }
+      const out = (stdout || stderr || "").trim();
+      if (code === 0 && out.startsWith("OK")) {
+        resolve();
+        return;
+      }
+      reject(
+        new Error(
+          out ||
+            `Windows print fail (exit ${code}). Printer name exact match? Devices and Printers: "${printerName}"`,
+        ),
+      );
+    });
+  });
+}
+
 function sendToPrinter(cfg, payload) {
   const transport = String(cfg.transport || "tcp").toLowerCase();
+  if (transport === "winspool" || transport === "windows" || transport === "usb") {
+    return sendViaWinSpool(cfg, payload);
+  }
   if (transport === "com" || transport === "serial") {
     return sendViaCom(cfg, payload);
   }

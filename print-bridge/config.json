@@ -1,7 +1,8 @@
 {
   "listenHost": "127.0.0.1",
   "listenPort": 9191,
-  "transport": "com",
+  "transport": "winspool",
+  "windowsPrinter": "BIXOLON SRP-352plusIII",
   "comPort": "COM3",
   "printerHost": "127.0.0.1",
   "printerPort": 9100,
