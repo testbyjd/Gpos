@@ -1,12 +1,11 @@
 /**
  * Build ESC/POS bytes for a thermal receipt (Bixolon / Epson-compatible).
  *
- * Important: pad lines to a CONSERVATIVE character width. Agar width zyada ho
- * to printer mid-line wrap karta hai → "Item" / "Amount" alag lines pe aa jate hain.
+ * NOTE: never run LF (0x0A) through a printable-ASCII filter — that turns
+ * newlines into "?" and the printer wraps mid-word.
  */
 
 function charsForWidth(paperWidth) {
-  // Bixolon SRP-352+ USB aksar Font A pe ~32–42. Conservative = clean columns.
   switch (String(paperWidth)) {
     case "58":
       return 32;
@@ -19,7 +18,6 @@ function charsForWidth(paperWidth) {
   }
 }
 
-/** ASCII-only money — no locale commas / unicode (thermal pe wrap/garbage se bachao). */
 function money(n) {
   const v = Number(n) || 0;
   const rounded = Math.round(v * 100) / 100;
@@ -27,10 +25,11 @@ function money(n) {
   return `Rs${rounded.toFixed(2)}`;
 }
 
+/** Printable ASCII only (no control chars). */
 function toAscii(s) {
   return String(s ?? "")
     .normalize("NFKD")
-    .replace(/[^\x20-\x7E]/g, "?");
+    .replace(/[^\x20-\x7E]/g, "");
 }
 
 function padLine(left, right, width) {
@@ -38,7 +37,6 @@ function padLine(left, right, width) {
   const r = toAscii(right);
   if (!r) return trunc(l, width);
   if (l.length + 1 + r.length > width) {
-    // Don't force one line — name already separate; keep right-aligned value alone
     return trunc(r, width);
   }
   const space = width - l.length - r.length;
@@ -74,12 +72,24 @@ function wrapWords(text, width) {
   return lines.length ? lines : [""];
 }
 
-function pushStr(chunks, s) {
+function pushRaw(chunks, bytes) {
+  chunks.push(Buffer.from(bytes));
+}
+
+/** Printable text only — no embedded newlines. */
+function pushText(chunks, s) {
   chunks.push(Buffer.from(toAscii(s), "ascii"));
 }
 
-function pushRaw(chunks, bytes) {
-  chunks.push(Buffer.from(bytes));
+/** ESC/POS line feed (must be raw 0x0A, never filtered to "?"). */
+function pushLF(chunks, count = 1) {
+  const n = Math.max(1, count);
+  pushRaw(chunks, Buffer.alloc(n, 0x0a));
+}
+
+function pushLine(chunks, s) {
+  pushText(chunks, s);
+  pushLF(chunks, 1);
 }
 
 /**
@@ -96,14 +106,12 @@ function buildEscPosReceipt(receipt, opts = {}) {
 
   // ESC @ init
   pushRaw(chunks, [0x1b, 0x40]);
-  // ESC M 0 — Font A (standard width)
+  // ESC M 0 — Font A
   pushRaw(chunks, [0x1b, 0x4d, 0x00]);
-  // GS ! 0 — normal character size (not double-width/height)
+  // GS ! 0 — normal size
   pushRaw(chunks, [0x1d, 0x21, 0x00]);
-  // ESC t 0 — code page PC437
+  // ESC t 0 — PC437
   pushRaw(chunks, [0x1b, 0x74, 0x00]);
-  // ESC 3 n — line spacing
-  pushRaw(chunks, [0x1b, 0x33, 0x3c]);
 
   if (opts.openDrawer) {
     const pin = Number(opts.drawerPin) === 1 ? 1 : 0;
@@ -115,33 +123,40 @@ function buildEscPosReceipt(receipt, opts = {}) {
   // Center + bold shop name
   pushRaw(chunks, [0x1b, 0x61, 0x01]);
   pushRaw(chunks, [0x1b, 0x45, 0x01]);
-  pushStr(chunks, `${toAscii(settings.shop_name || "SHOP").toUpperCase()}\n`);
+  pushLine(chunks, toAscii(settings.shop_name || "SHOP").toUpperCase());
+  pushLF(chunks, 1);
   pushRaw(chunks, [0x1b, 0x45, 0x00]);
 
   if (settings.tagline) {
-    for (const line of wrapWords(settings.tagline, width)) pushStr(chunks, `${line}\n`);
+    for (const line of wrapWords(settings.tagline, width)) pushLine(chunks, line);
   }
   if (settings.address) {
-    for (const line of wrapWords(settings.address, width)) pushStr(chunks, `${line}\n`);
+    for (const line of wrapWords(settings.address, width)) pushLine(chunks, line);
   }
-  if (settings.phone) pushStr(chunks, `Ph: ${toAscii(settings.phone)}\n`);
+  if (settings.phone) pushLine(chunks, `Ph: ${toAscii(settings.phone)}`);
 
   // Left align body
   pushRaw(chunks, [0x1b, 0x61, 0x00]);
-  pushStr(chunks, `${rule}\n`);
+  pushLine(chunks, rule);
+  pushLF(chunks, 1);
 
-  pushStr(chunks, `Inv: ${toAscii(data.invoice_no || "-")}\n`);
-  pushStr(chunks, `Date: ${toAscii(data.date || "-")}\n`);
+  pushLine(chunks, `Inv: ${toAscii(data.invoice_no || "-")}`);
+  pushLF(chunks, 1);
+  pushLine(chunks, `Date: ${toAscii(data.date || "-")}`);
+  pushLF(chunks, 1);
   if (settings.show_cashier !== false && data.cashier) {
-    pushStr(chunks, `Cashier: ${toAscii(data.cashier)}\n`);
+    pushLine(chunks, `Cashier: ${toAscii(data.cashier)}`);
   }
   if (settings.show_customer !== false && data.customer) {
-    pushStr(chunks, `Customer: ${toAscii(data.customer)}\n`);
+    pushLine(chunks, `Customer: ${toAscii(data.customer)}`);
   }
 
-  pushStr(chunks, `${rule}\n`);
-  pushStr(chunks, `${padLine("Item", "Amount", width)}\n`);
-  pushStr(chunks, `${eq}\n`);
+  pushLine(chunks, rule);
+  pushLF(chunks, 1);
+  pushLine(chunks, padLine("Item", "Amount", width));
+  pushLF(chunks, 1);
+  pushLine(chunks, eq);
+  pushLF(chunks, 1);
 
   const lines = Array.isArray(data.lines) ? data.lines : [];
   let subtotal = 0;
@@ -152,44 +167,46 @@ function buildEscPosReceipt(receipt, opts = {}) {
     subtotal += amount;
 
     for (const w of wrapWords(line.name || "Item", width)) {
-      pushStr(chunks, `${w}\n`);
+      pushLine(chunks, w);
     }
-    // Compact: "2x Rs540            Rs1080"
-    const left = `${qty}x ${money(price)}`;
-    pushStr(chunks, `${padLine(left, money(amount), width)}\n`);
+    pushLine(chunks, padLine(`${qty}x ${money(price)}`, money(amount), width));
   }
 
   const discount = Number(data.discount) || 0;
   const total = Math.max(0, subtotal - discount);
 
-  pushStr(chunks, `${rule}\n`);
-  pushStr(chunks, `${padLine("Subtotal", money(subtotal), width)}\n`);
+  pushLine(chunks, rule);
+  pushLF(chunks, 1);
+  pushLine(chunks, padLine("Subtotal", money(subtotal), width));
+  pushLF(chunks, 1);
   if (discount > 0) {
-    pushStr(chunks, `${padLine("Discount", `-${money(discount)}`, width)}\n`);
+    pushLine(chunks, padLine("Discount", `-${money(discount)}`, width));
   }
   pushRaw(chunks, [0x1b, 0x45, 0x01]);
-  pushStr(chunks, `${padLine("TOTAL", money(total), width)}\n`);
+  pushLine(chunks, padLine("TOTAL", money(total), width));
+  pushLF(chunks, 1);
   pushRaw(chunks, [0x1b, 0x45, 0x00]);
 
-  if (data.method) pushStr(chunks, `${padLine("Payment", toAscii(data.method), width)}\n`);
+  if (data.method) pushLine(chunks, padLine("Payment", toAscii(data.method), width));
   if (typeof data.paid === "number" && data.paid > 0) {
-    pushStr(chunks, `${padLine("Paid", money(data.paid), width)}\n`);
+    pushLine(chunks, padLine("Paid", money(data.paid), width));
   }
   if (typeof data.change === "number" && data.change > 0) {
-    pushStr(chunks, `${padLine("Change", money(data.change), width)}\n`);
+    pushLine(chunks, padLine("Change", money(data.change), width));
   }
 
-  pushStr(chunks, `${rule}\n`);
+  pushText(chunks, rule);
+  pushLF(chunks, 1);
 
   if (settings.footer_note) {
     pushRaw(chunks, [0x1b, 0x61, 0x01]);
     for (const line of String(settings.footer_note).split(/\r?\n/)) {
-      for (const w of wrapWords(line, width)) pushStr(chunks, `${w}\n`);
+      for (const w of wrapWords(line, width)) pushLine(chunks, w);
     }
     pushRaw(chunks, [0x1b, 0x61, 0x00]);
   }
 
-  pushStr(chunks, "\n\n\n");
+  pushLF(chunks, 3);
   // Partial cut
   pushRaw(chunks, [0x1d, 0x56, 0x01]);
 
