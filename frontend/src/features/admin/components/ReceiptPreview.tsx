@@ -1,7 +1,6 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { formatMoney } from "@/lib/utils";
 import {
   normalizeReceiptSettings,
   receiptWidthPx,
@@ -69,13 +68,10 @@ export function ReceiptPreview({
   const discount = data.discount ?? 0;
   const total = subtotal - discount;
   const widthPx = receiptWidthPx(s.paper_width);
-  const bodySize = s.font_size!;
-  const weight = s.font_weight!;
-  const titleSize = s.title_size!;
-  const metaSize = Math.max(9, Math.round(bodySize * 0.92));
-  const totalSize = Math.max(bodySize + 2, Math.round(titleSize * 0.88));
-  const heavy = Math.min(900, weight + 200);
-  const mediumHeavy = Math.min(900, weight + 100);
+  // Mirror BIXOLON Font A at the stable 32-column RAW configuration.
+  const bodySize = 12;
+  const weight = 500;
+  const receiptMoney = (value: number) => `Rs${compactNumber(value)}`;
 
   return (
     <div
@@ -83,96 +79,100 @@ export function ReceiptPreview({
       style={{
         ...ink,
         width: widthPx,
-        padding: `${s.padding}px ${Math.max(8, (s.padding ?? 12) + 2)}px`,
+        padding: "32px 12px 40px",
         fontFamily: "'Courier New', Courier, ui-monospace, monospace",
         fontSize: bodySize,
         fontWeight: weight,
-        lineHeight: s.line_height,
+        lineHeight: 1.12,
         boxShadow: "0 1px 6px rgba(0,0,0,0.15)",
       }}
     >
+      <div style={{ width: "32ch", whiteSpace: "nowrap" }}>
       <div style={{ textAlign: "center" }}>
         <div
           style={{
-            fontSize: titleSize,
-            fontWeight: Math.min(900, weight + 200),
+            fontSize: bodySize,
+            fontWeight: 800,
             textTransform: "uppercase",
-            letterSpacing: 0.3,
           }}
         >
           {s.shop_name}
         </div>
-        {s.tagline && <div style={{ fontSize: metaSize, fontWeight: weight }}>{s.tagline}</div>}
-        {s.address && <div style={{ fontSize: metaSize, fontWeight: weight }}>{s.address}</div>}
-        {s.phone && <div style={{ fontSize: metaSize, fontWeight: weight }}>Ph: {s.phone}</div>}
+        {s.tagline && <div>{s.tagline}</div>}
+        {s.address && <div>{s.address}</div>}
+        {s.phone && <div>Ph: {s.phone}</div>}
       </div>
 
-      <Divider gap={s.section_gap!} />
+      <Divider character="-" />
 
-      <Row left={`Invoice: ${data.invoice_no}`} weight={weight} />
-      <Row left={`Date: ${data.date}`} weight={weight} />
-      {s.show_cashier && data.cashier && <Row left={`Cashier: ${data.cashier}`} weight={weight} />}
-      {s.show_customer && data.customer && <Row left={`Customer: ${data.customer}`} weight={weight} />}
+      <Row left={`Inv: ${data.invoice_no}`} />
+      <Row left={`Date: ${data.date}`} />
+      {s.show_cashier && data.cashier && <Row left={`Cashier: ${data.cashier}`} />}
+      {s.show_customer && data.customer && <Row left={`Customer: ${data.customer}`} />}
 
-      <Divider gap={s.section_gap!} />
+      <Divider character="-" />
 
-      <div style={{ display: "flex", fontWeight: heavy }}>
-        <span style={{ flex: 1 }}>Item</span>
-        <span style={{ width: 28, textAlign: "right" }}>Qty</span>
-        <span style={{ width: 64, textAlign: "right" }}>Amount</span>
-      </div>
-      <Dashes size={metaSize} weight={mediumHeavy} />
+      <ItemRow name="Item" calculation="QxRate" amount="Amount" />
+      <Divider character="=" />
       {data.lines.map((l, i) => (
-        <div key={i} style={{ marginBottom: Math.max(2, Math.round((s.section_gap ?? 7) * 0.4)), fontWeight: weight }}>
-          <div style={{ fontWeight: mediumHeavy }}>{l.name}</div>
-          <div style={{ display: "flex" }}>
-            <span style={{ flex: 1 }}>{formatMoney(l.price)}</span>
-            <span style={{ width: 28, textAlign: "right" }}>{l.qty}</span>
-            <span style={{ width: 64, textAlign: "right" }}>{formatMoney(l.qty * l.price)}</span>
-          </div>
-        </div>
+        <ItemRow
+          key={i}
+          name={truncate(l.name, 18)}
+          calculation={`${compactNumber(l.qty)}x${compactNumber(l.price)}`}
+          amount={compactNumber(l.qty * l.price)}
+        />
       ))}
 
-      <Divider gap={s.section_gap!} />
+      <Divider character="-" />
 
-      <Row left="Subtotal" right={formatMoney(subtotal)} weight={weight} />
-      {discount > 0 && <Row left="Discount" right={`- ${formatMoney(discount)}`} weight={weight} />}
-      <div style={{ display: "flex", fontWeight: heavy, fontSize: totalSize, marginTop: 3 }}>
-        <span style={{ flex: 1 }}>TOTAL</span>
-        <span>{formatMoney(total)}</span>
-      </div>
-      {data.method && <Row left="Payment" right={data.method} weight={weight} />}
-      {typeof data.paid === "number" && data.paid > 0 && <Row left="Paid" right={formatMoney(data.paid)} weight={weight} />}
-      {typeof data.change === "number" && data.change > 0 && <Row left="Change" right={formatMoney(data.change)} weight={weight} />}
+      <Row left="Subtotal" right={receiptMoney(subtotal)} />
+      {discount > 0 && <Row left="Discount" right={`-${receiptMoney(discount)}`} />}
+      <Row left="TOTAL" right={receiptMoney(total)} bold />
+      {data.method && <Row left="Payment" right={data.method} />}
+      {typeof data.paid === "number" && data.paid > 0 && <Row left="Paid" right={receiptMoney(data.paid)} />}
+      {typeof data.change === "number" && data.change > 0 && <Row left="Change" right={receiptMoney(data.change)} />}
 
-      <Divider gap={s.section_gap!} />
+      <Divider character="-" />
 
       {s.footer_note && (
-        <div style={{ textAlign: "center", fontSize: metaSize, fontWeight: weight, whiteSpace: "pre-wrap" }}>
+        <div style={{ textAlign: "center", whiteSpace: "pre-wrap" }}>
           {s.footer_note}
         </div>
       )}
+      </div>
     </div>
   );
 }
 
-function Row({ left, right, weight }: { left: string; right?: string; weight: number }) {
+function Row({ left, right, bold = false }: { left: string; right?: string; bold?: boolean }) {
   return (
-    <div style={{ display: "flex", fontWeight: weight }}>
-      <span style={{ flex: 1 }}>{left}</span>
+    <div style={{ display: "flex", width: "32ch", fontWeight: bold ? 800 : undefined }}>
+      <span style={{ flex: 1, overflow: "hidden" }}>{left}</span>
       {right !== undefined && <span style={{ textAlign: "right" }}>{right}</span>}
     </div>
   );
 }
 
-function Divider({ gap }: { gap: number }) {
-  return <div style={{ borderTop: "2px dashed #000", margin: `${gap}px 0` }} />;
-}
-
-function Dashes({ size, weight }: { size: number; weight: number }) {
+function ItemRow({ name, calculation, amount }: { name: string; calculation: string; amount: string }) {
   return (
-    <div style={{ fontSize: size, fontWeight: weight, overflow: "hidden", whiteSpace: "nowrap" }}>
-      =================================
+    <div style={{ display: "grid", gridTemplateColumns: "18ch 6ch 6ch", columnGap: "1ch", width: "32ch" }}>
+      <span>{name}</span>
+      <span style={{ textAlign: "right" }}>{calculation}</span>
+      <span style={{ textAlign: "right" }}>{amount}</span>
     </div>
   );
+}
+
+function Divider({ character }: { character: "-" | "=" }) {
+  return <div aria-hidden="true">{character.repeat(32)}</div>;
+}
+
+function compactNumber(value: number): string {
+  const rounded = Math.round((Number(value) || 0) * 100) / 100;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2);
+}
+
+function truncate(value: string, max: number): string {
+  if (value.length <= max) return value;
+  return `${value.slice(0, max - 1)}.`;
 }
