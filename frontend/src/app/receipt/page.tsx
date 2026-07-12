@@ -154,7 +154,7 @@ export default function ReceiptPage() {
       {loadError && <PageAlert message={loadError} tone="error" className="print:hidden" />}
       <AppToast toast={toast} onDismiss={hideToast} />
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_440px]">
         <div className="grid gap-4 print:hidden">
           <PagePanel>
             <PanelHeader title="Shop details" meta="Yeh details har customer bill par chhapti hain" />
@@ -239,7 +239,7 @@ export default function ReceiptPage() {
           <PagePanel>
             <PanelHeader
               title="Design controls"
-              meta="Sliders se live redesign — Save dabao print pe apply hone ke liye"
+              meta="Sliders se preview foran update hota hai; Save ke baad Test print se BIXOLON result check karein"
               actions={
                 <Button size="sm" variant="secondary" onClick={resetDesign}>
                   <RotateCcw className="h-4 w-4" />

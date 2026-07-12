@@ -33,6 +33,12 @@ function compactNumber(n) {
   return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2);
 }
 
+function clampNumber(value, fallback, min, max) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
 /** Printable ASCII only (no control chars). */
 function toAscii(s) {
   return String(s ?? "")
@@ -122,19 +128,27 @@ function buildEscPosReceipt(receipt, opts = {}) {
   const data = receipt?.data || {};
   const width = charsForWidth(settings.paper_width);
   const rule = "-".repeat(width);
-  const eq = "=".repeat(width);
   const chunks = [];
+  const lineHeight = clampNumber(settings.line_height, 1.35, 1.1, 1.9);
+  // Preserve the proven default (30 dots); larger/smaller slider values adjust from it.
+  const lineSpacing = Math.round(30 + (lineHeight - 1.35) * 20);
+  const bodyBold = clampNumber(settings.font_weight, 700, 400, 900) >= 800;
+  const largeBody = clampNumber(settings.font_size, 12, 10, 18) >= 15;
+  const largeTitle = clampNumber(settings.title_size, 17, 12, 26) >= 20;
+  const paddingLines = Math.max(0, Math.round((clampNumber(settings.padding, 12, 4, 24) - 12) / 8));
+  const sectionGapLines = Math.max(0, Math.round((clampNumber(settings.section_gap, 7, 2, 16) - 7) / 6));
 
   // ESC @ init
   pushRaw(chunks, [0x1b, 0x40]);
   // ESC M 0 — Font A
   pushRaw(chunks, [0x1b, 0x4d, 0x00]);
-  // ESC 2 — restore the printer's standard 1/6-inch line spacing.
-  pushRaw(chunks, [0x1b, 0x32]);
+  // ESC 3 n — configurable line spacing, safely constrained for Font A.
+  pushRaw(chunks, [0x1b, 0x33, lineSpacing]);
   // GS ! 0 — normal size
   pushRaw(chunks, [0x1d, 0x21, 0x00]);
   // ESC t 0 — PC437
   pushRaw(chunks, [0x1b, 0x74, 0x00]);
+  if (paddingLines) pushLF(chunks, paddingLines);
 
   if (opts.openDrawer) {
     const pin = Number(opts.drawerPin) === 1 ? 1 : 0;
@@ -146,7 +160,10 @@ function buildEscPosReceipt(receipt, opts = {}) {
   // Center + bold shop name
   pushRaw(chunks, [0x1b, 0x61, 0x01]);
   pushRaw(chunks, [0x1b, 0x45, 0x01]);
+  // GS ! 0x10 doubles title height without consuming extra horizontal columns.
+  if (largeTitle) pushRaw(chunks, [0x1d, 0x21, 0x10]);
   pushLine(chunks, toAscii(settings.shop_name || "SHOP").toUpperCase());
+  if (largeTitle) pushRaw(chunks, [0x1d, 0x21, 0x00]);
   pushRaw(chunks, [0x1b, 0x45, 0x00]);
 
   if (settings.tagline) {
@@ -164,7 +181,11 @@ function buildEscPosReceipt(receipt, opts = {}) {
 
   // Left align body
   pushRaw(chunks, [0x1b, 0x61, 0x00]);
+  // Larger body setting doubles height only, keeping the 32-column table intact.
+  if (largeBody) pushRaw(chunks, [0x1d, 0x21, 0x10]);
+  if (bodyBold) pushRaw(chunks, [0x1b, 0x45, 0x01]);
   pushLine(chunks, rule);
+  if (sectionGapLines) pushLF(chunks, sectionGapLines);
 
   pushLine(chunks, `Inv: ${toAscii(data.invoice_no || "-")}`);
   pushLine(chunks, `Date: ${toAscii(data.date || "-")}`);
@@ -176,6 +197,7 @@ function buildEscPosReceipt(receipt, opts = {}) {
   }
 
   pushLine(chunks, rule);
+  if (sectionGapLines) pushLF(chunks, sectionGapLines);
   pushLine(chunks, itemLine("ITEM NAME", "QTY", "RATE", "AMOUNT", width));
   pushLine(chunks, ".".repeat(width));
 
@@ -204,6 +226,7 @@ function buildEscPosReceipt(receipt, opts = {}) {
   const total = Math.max(0, subtotal - discount);
 
   pushLine(chunks, rule);
+  if (sectionGapLines) pushLF(chunks, sectionGapLines);
   pushLine(chunks, padLine("Subtotal", money(subtotal), width));
   if (discount > 0) {
     pushLine(chunks, padLine("Discount", `-${money(discount)}`, width));
@@ -221,6 +244,8 @@ function buildEscPosReceipt(receipt, opts = {}) {
 
   pushText(chunks, rule);
   pushLF(chunks, 1);
+  if (bodyBold) pushRaw(chunks, [0x1b, 0x45, 0x00]);
+  if (largeBody) pushRaw(chunks, [0x1d, 0x21, 0x00]);
 
   if (settings.footer_note) {
     pushRaw(chunks, [0x1b, 0x61, 0x01]);
@@ -232,7 +257,7 @@ function buildEscPosReceipt(receipt, opts = {}) {
 
   // Feed the footer clear of the cutter, then use the BIXOLON-compatible
   // GS V 66 n form. The short GS V 1 form is ignored by some Windows queues.
-  pushLF(chunks, 5);
+  pushLF(chunks, 5 + paddingLines);
   // Partial cut, feed 0 extra units.
   pushRaw(chunks, [0x1d, 0x56, 0x42, 0x00]);
 

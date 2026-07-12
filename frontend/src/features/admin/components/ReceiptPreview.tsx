@@ -68,9 +68,13 @@ export function ReceiptPreview({
   const discount = data.discount ?? 0;
   const total = subtotal - discount;
   const widthPx = receiptWidthPx(s.paper_width);
-  // Mirror BIXOLON Font A at the stable 32-column RAW configuration.
-  const bodySize = 12;
-  const weight = 500;
+  const bodySize = s.font_size ?? 12;
+  const weight = s.font_weight ?? 500;
+  const titleSize = s.title_size ?? bodySize;
+  const sectionGap = s.section_gap ?? 7;
+  const padding = s.padding ?? 12;
+  // Let the editor show actual size changes without clipping the 32-column grid.
+  const previewWidth = Math.max(widthPx, Math.ceil(bodySize * 32 * 0.62) + padding * 2);
   const receiptMoney = (value: number) => `Rs${compactNumber(value)}`;
 
   return (
@@ -78,12 +82,12 @@ export function ReceiptPreview({
       className={`print-receipt mx-auto bg-white text-black ${className}`}
       style={{
         ...ink,
-        width: widthPx,
-        padding: "32px 12px 40px",
+        width: previewWidth,
+        padding: `${padding + 20}px ${padding}px ${padding + 28}px`,
         fontFamily: "'Courier New', Courier, ui-monospace, monospace",
         fontSize: bodySize,
         fontWeight: weight,
-        lineHeight: 1.12,
+        lineHeight: s.line_height,
         boxShadow: "0 1px 6px rgba(0,0,0,0.15)",
       }}
     >
@@ -91,7 +95,7 @@ export function ReceiptPreview({
       <div style={{ textAlign: "center" }}>
         <div
           style={{
-            fontSize: bodySize,
+            fontSize: titleSize,
             fontWeight: 800,
             textTransform: "uppercase",
           }}
@@ -101,20 +105,20 @@ export function ReceiptPreview({
         {s.tagline && <div>{s.tagline}</div>}
         {s.address && <div>{s.address}</div>}
         {s.phone && <div>Ph: {s.phone}</div>}
-        {data.method && <div style={{ fontWeight: 800, marginTop: 2 }}>{data.method.toUpperCase()}</div>}
+        {data.method && <div style={{ fontWeight: 800, marginTop: sectionGap / 3 }}>{data.method.toUpperCase()}</div>}
       </div>
 
-      <Divider character="-" />
+      <Divider character="-" gap={sectionGap} />
 
       <Row left={`Inv: ${data.invoice_no}`} />
       <Row left={`Date: ${data.date}`} />
       {s.show_cashier && data.cashier && <Row left={`Cashier: ${data.cashier}`} />}
       {s.show_customer && data.customer && <Row left={`Customer: ${data.customer}`} />}
 
-      <Divider character="-" />
+      <Divider character="-" gap={sectionGap} />
 
       <ItemRow name="ITEM NAME" qty="QTY" rate="RATE" amount="AMOUNT" />
-      <Divider character="." />
+      <Divider character="." gap={Math.max(1, sectionGap / 3)} />
       {data.lines.map((l, i) => (
         <div key={i}>
           <ItemRow
@@ -123,11 +127,11 @@ export function ReceiptPreview({
             rate={compactNumber(l.price)}
             amount={compactNumber(l.qty * l.price)}
           />
-          <Divider character="." />
+          <Divider character="." gap={Math.max(1, sectionGap / 3)} />
         </div>
       ))}
 
-      <Divider character="-" />
+      <Divider character="-" gap={sectionGap} />
 
       <Row left="Subtotal" right={receiptMoney(subtotal)} />
       {discount > 0 && <Row left="Discount" right={`-${receiptMoney(discount)}`} />}
@@ -135,7 +139,7 @@ export function ReceiptPreview({
       {typeof data.paid === "number" && data.paid > 0 && <Row left="Paid" right={receiptMoney(data.paid)} />}
       {typeof data.change === "number" && data.change > 0 && <Row left="Change" right={receiptMoney(data.change)} />}
 
-      <Divider character="-" />
+      <Divider character="-" gap={sectionGap} />
 
       {s.footer_note && (
         <div style={{ textAlign: "center", whiteSpace: "pre-wrap" }}>
@@ -177,8 +181,8 @@ function ItemRow({
   );
 }
 
-function Divider({ character }: { character: "-" | "." }) {
-  return <div aria-hidden="true">{character.repeat(32)}</div>;
+function Divider({ character, gap }: { character: "-" | "."; gap: number }) {
+  return <div aria-hidden="true" style={{ margin: `${gap}px 0` }}>{character.repeat(32)}</div>;
 }
 
 function compactNumber(value: number): string {
