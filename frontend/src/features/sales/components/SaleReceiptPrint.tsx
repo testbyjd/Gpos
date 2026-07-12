@@ -7,6 +7,7 @@ import { ModalPortal } from "@/components/ui/modal-portal";
 import { ReceiptPreview } from "@/features/admin/components/ReceiptPreview";
 import { getReceiptSettings, normalizeReceiptSettings, type ReceiptSettings } from "@/lib/admin-api";
 import { getErrorMessage } from "@/lib/api";
+import { printReceiptDirect } from "@/lib/print-bridge";
 import type { SaleDetail } from "@/lib/admin-api";
 import { saleToReceiptData } from "../saleReceipt";
 
@@ -23,6 +24,8 @@ export function SaleReceiptPrint({ sale, onClose, autoPrint = false }: Props) {
   const [settings, setSettings] = useState<ReceiptSettings>(DEFAULTS);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [printError, setPrintError] = useState<string | null>(null);
+  const [printing, setPrinting] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -44,12 +47,25 @@ export function SaleReceiptPrint({ sale, onClose, autoPrint = false }: Props) {
 
   useEffect(() => {
     if (!autoPrint || !ready || error) return;
-    const t = window.setTimeout(() => window.print(), 150);
-    return () => window.clearTimeout(t);
+    void handlePrint();
+    // A sale already kicks the drawer; receipt printing must not kick it twice.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoPrint, ready, error]);
 
-  function handlePrint() {
-    window.print();
+  async function handlePrint() {
+    if (printing) return;
+    setPrinting(true);
+    setPrintError(null);
+    const result = await printReceiptDirect({
+      settings: settings as unknown as Record<string, unknown>,
+      data: saleToReceiptData(sale) as unknown as Record<string, unknown>,
+      openDrawer: false,
+    });
+    setPrinting(false);
+    if (!result.ok) {
+      setPrintError(`${result.message} Browser print fallback use ho raha hai.`);
+      window.setTimeout(() => window.print(), 50);
+    }
   }
 
   return (
@@ -59,9 +75,9 @@ export function SaleReceiptPrint({ sale, onClose, autoPrint = false }: Props) {
           <div className="mb-4 flex w-full items-center justify-between no-print">
             <p className="font-black text-white print:text-foreground">Receipt — {sale.invoice_no}</p>
             <div className="flex gap-2">
-              <Button size="sm" onClick={handlePrint} disabled={!ready || !!error}>
+              <Button size="sm" onClick={() => void handlePrint()} disabled={!ready || !!error || printing}>
                 <Printer className="h-4 w-4" />
-                Print
+                {printing ? "Printing…" : "Print"}
               </Button>
               <button
                 type="button"
@@ -75,6 +91,7 @@ export function SaleReceiptPrint({ sale, onClose, autoPrint = false }: Props) {
           </div>
 
           {error && <p className="mb-3 text-sm font-bold text-danger no-print">{error}</p>}
+          {printError && <p className="mb-3 text-sm font-bold text-warning no-print">{printError}</p>}
 
           {ready && !error && (
             <ReceiptPreview settings={settings} data={saleToReceiptData(sale)} />

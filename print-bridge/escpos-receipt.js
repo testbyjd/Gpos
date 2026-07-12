@@ -14,7 +14,8 @@ function charsForWidth(paperWidth) {
       return 42;
     case "80":
     default:
-      return 32;
+      // SRP-352plusIII has a 512-dot print area: Font A fits 42 columns.
+      return 42;
   }
 }
 
@@ -108,6 +109,8 @@ function buildEscPosReceipt(receipt, opts = {}) {
   pushRaw(chunks, [0x1b, 0x40]);
   // ESC M 0 — Font A
   pushRaw(chunks, [0x1b, 0x4d, 0x00]);
+  // ESC 2 — restore the printer's standard 1/6-inch line spacing.
+  pushRaw(chunks, [0x1b, 0x32]);
   // GS ! 0 — normal size
   pushRaw(chunks, [0x1d, 0x21, 0x00]);
   // ESC t 0 — PC437
@@ -124,7 +127,6 @@ function buildEscPosReceipt(receipt, opts = {}) {
   pushRaw(chunks, [0x1b, 0x61, 0x01]);
   pushRaw(chunks, [0x1b, 0x45, 0x01]);
   pushLine(chunks, toAscii(settings.shop_name || "SHOP").toUpperCase());
-  pushLF(chunks, 1);
   pushRaw(chunks, [0x1b, 0x45, 0x00]);
 
   if (settings.tagline) {
@@ -138,12 +140,9 @@ function buildEscPosReceipt(receipt, opts = {}) {
   // Left align body
   pushRaw(chunks, [0x1b, 0x61, 0x00]);
   pushLine(chunks, rule);
-  pushLF(chunks, 1);
 
   pushLine(chunks, `Inv: ${toAscii(data.invoice_no || "-")}`);
-  pushLF(chunks, 1);
   pushLine(chunks, `Date: ${toAscii(data.date || "-")}`);
-  pushLF(chunks, 1);
   if (settings.show_cashier !== false && data.cashier) {
     pushLine(chunks, `Cashier: ${toAscii(data.cashier)}`);
   }
@@ -152,11 +151,8 @@ function buildEscPosReceipt(receipt, opts = {}) {
   }
 
   pushLine(chunks, rule);
-  pushLF(chunks, 1);
   pushLine(chunks, padLine("Item", "Amount", width));
-  pushLF(chunks, 1);
   pushLine(chunks, eq);
-  pushLF(chunks, 1);
 
   const lines = Array.isArray(data.lines) ? data.lines : [];
   let subtotal = 0;
@@ -176,15 +172,12 @@ function buildEscPosReceipt(receipt, opts = {}) {
   const total = Math.max(0, subtotal - discount);
 
   pushLine(chunks, rule);
-  pushLF(chunks, 1);
   pushLine(chunks, padLine("Subtotal", money(subtotal), width));
-  pushLF(chunks, 1);
   if (discount > 0) {
     pushLine(chunks, padLine("Discount", `-${money(discount)}`, width));
   }
   pushRaw(chunks, [0x1b, 0x45, 0x01]);
   pushLine(chunks, padLine("TOTAL", money(total), width));
-  pushLF(chunks, 1);
   pushRaw(chunks, [0x1b, 0x45, 0x00]);
 
   if (data.method) pushLine(chunks, padLine("Payment", toAscii(data.method), width));
