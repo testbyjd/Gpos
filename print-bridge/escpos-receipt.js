@@ -200,9 +200,11 @@ function buildEscPosReceipt(receipt, opts = {}) {
     pushRaw(chunks, [0x1b, 0x61, 0x00]);
   }
 
-  pushLF(chunks, 3);
-  // Partial cut
-  pushRaw(chunks, [0x1d, 0x56, 0x01]);
+  // Feed the footer clear of the cutter, then use the BIXOLON-compatible
+  // GS V 66 n form. The short GS V 1 form is ignored by some Windows queues.
+  pushLF(chunks, 5);
+  // Partial cut, feed 0 extra units.
+  pushRaw(chunks, [0x1d, 0x56, 0x42, 0x00]);
 
   return Buffer.concat(chunks);
 }
