@@ -14,8 +14,9 @@ function charsForWidth(paperWidth) {
       return 42;
     case "80":
     default:
-      // SRP-352plusIII has a 512-dot print area: Font A fits 42 columns.
-      return 42;
+      // The SRP-352plusIII Windows RAW queue used at the register exposes
+      // 32 reliable Font-A columns. Wider rows wrap the amount onto a new line.
+      return 32;
   }
 }
 
