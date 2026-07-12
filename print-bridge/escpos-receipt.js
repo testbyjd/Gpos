@@ -27,6 +27,13 @@ function money(n) {
   return `Rs${rounded.toFixed(2)}`;
 }
 
+/** Compact amount for item columns; the table heading already establishes amounts. */
+function compactNumber(n) {
+  const v = Number(n) || 0;
+  const rounded = Math.round(v * 100) / 100;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2);
+}
+
 /** Printable ASCII only (no control chars). */
 function toAscii(s) {
   return String(s ?? "")
@@ -43,6 +50,17 @@ function padLine(left, right, width) {
   }
   const space = width - l.length - r.length;
   return l + " ".repeat(Math.max(1, space)) + r;
+}
+
+function itemLine(name, calculation, amount, width) {
+  const calculationWidth = 6;
+  const amountWidth = 6;
+  const nameWidth = width - calculationWidth - amountWidth - 2;
+  return [
+    trunc(name, nameWidth).padEnd(nameWidth),
+    trunc(calculation, calculationWidth).padStart(calculationWidth),
+    trunc(amount, amountWidth).padStart(amountWidth),
+  ].join(" ");
 }
 
 function trunc(s, max) {
@@ -152,7 +170,7 @@ function buildEscPosReceipt(receipt, opts = {}) {
   }
 
   pushLine(chunks, rule);
-  pushLine(chunks, padLine("Item", "Amount", width));
+  pushLine(chunks, itemLine("Item", "QxRate", "Amount", width));
   pushLine(chunks, eq);
 
   const lines = Array.isArray(data.lines) ? data.lines : [];
@@ -163,10 +181,15 @@ function buildEscPosReceipt(receipt, opts = {}) {
     const amount = qty * price;
     subtotal += amount;
 
-    for (const w of wrapWords(line.name || "Item", width)) {
-      pushLine(chunks, w);
-    }
-    pushLine(chunks, padLine(`${qty}x ${money(price)}`, money(amount), width));
+    pushLine(
+      chunks,
+      itemLine(
+        line.name || "Item",
+        `${compactNumber(qty)}x${compactNumber(price)}`,
+        compactNumber(amount),
+        width,
+      ),
+    );
   }
 
   const discount = Number(data.discount) || 0;
