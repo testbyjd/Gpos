@@ -14,8 +14,8 @@ function charsForWidth(paperWidth) {
       return 42;
     case "80":
     default:
-      // SRP-352plusIII: 512-dot printable area / 12-dot Font A = 42 columns.
-      return 42;
+      // Stable SRP-352plusIII RAW layout: 32 columns without driver wrapping.
+      return 32;
   }
 }
 
@@ -129,11 +129,6 @@ function buildEscPosReceipt(receipt, opts = {}) {
   pushRaw(chunks, [0x1b, 0x4d, 0x00]);
   // ESC 2 — restore the printer's standard 1/6-inch line spacing.
   pushRaw(chunks, [0x1b, 0x32]);
-  // The Windows queue is retaining a narrow (roughly 384-dot) print area.
-  // Force the SRP-352plusIII's full 72 mm / 576-dot printable area.
-  // GS L 0 — left margin 0; GS W 576 — print-area width 576 dots.
-  pushRaw(chunks, [0x1d, 0x4c, 0x00, 0x00]);
-  pushRaw(chunks, [0x1d, 0x57, 0x40, 0x02]);
   // GS ! 0 — normal size
   pushRaw(chunks, [0x1d, 0x21, 0x00]);
   // ESC t 0 — PC437
