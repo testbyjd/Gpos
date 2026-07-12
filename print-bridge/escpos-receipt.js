@@ -14,9 +14,8 @@ function charsForWidth(paperWidth) {
       return 42;
     case "80":
     default:
-      // The SRP-352plusIII Windows RAW queue used at the register exposes
-      // 32 reliable Font-A columns. Wider rows wrap the amount onto a new line.
-      return 32;
+      // SRP-352plusIII: 512-dot printable area / 12-dot Font A = 42 columns.
+      return 42;
   }
 }
 
