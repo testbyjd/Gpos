@@ -101,6 +101,7 @@ export function ReceiptPreview({
         {s.tagline && <div>{s.tagline}</div>}
         {s.address && <div>{s.address}</div>}
         {s.phone && <div>Ph: {s.phone}</div>}
+        {data.method && <div style={{ fontWeight: 800, marginTop: 2 }}>{data.method.toUpperCase()}</div>}
       </div>
 
       <Divider character="-" />
@@ -112,23 +113,25 @@ export function ReceiptPreview({
 
       <Divider character="-" />
 
-      <ItemRow name="Item" calculation="QxRate" amount="Amount" />
-      <Divider character="=" />
+      <ItemRow name="ITEM NAME" qty="QTY" rate="RATE" amount="AMOUNT" />
+      <Divider character="." />
       {data.lines.map((l, i) => (
-        <ItemRow
-          key={i}
-          name={truncate(l.name, 18)}
-          calculation={`${compactNumber(l.qty)}x${compactNumber(l.price)}`}
-          amount={compactNumber(l.qty * l.price)}
-        />
+        <div key={i}>
+          <ItemRow
+            name={truncate(l.name, 13)}
+            qty={compactNumber(l.qty)}
+            rate={compactNumber(l.price)}
+            amount={compactNumber(l.qty * l.price)}
+          />
+          <Divider character="." />
+        </div>
       ))}
 
       <Divider character="-" />
 
       <Row left="Subtotal" right={receiptMoney(subtotal)} />
       {discount > 0 && <Row left="Discount" right={`-${receiptMoney(discount)}`} />}
-      <Row left="TOTAL" right={receiptMoney(total)} bold />
-      {data.method && <Row left="Payment" right={data.method} />}
+      <Row left="NET BILL" right={receiptMoney(total)} bold />
       {typeof data.paid === "number" && data.paid > 0 && <Row left="Paid" right={receiptMoney(data.paid)} />}
       {typeof data.change === "number" && data.change > 0 && <Row left="Change" right={receiptMoney(data.change)} />}
 
@@ -153,17 +156,28 @@ function Row({ left, right, bold = false }: { left: string; right?: string; bold
   );
 }
 
-function ItemRow({ name, calculation, amount }: { name: string; calculation: string; amount: string }) {
+function ItemRow({
+  name,
+  qty,
+  rate,
+  amount,
+}: {
+  name: string;
+  qty: string;
+  rate: string;
+  amount: string;
+}) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "18ch 6ch 6ch", columnGap: "1ch", width: "32ch" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "13ch 4ch 6ch 6ch", columnGap: "1ch", width: "32ch" }}>
       <span>{name}</span>
-      <span style={{ textAlign: "right" }}>{calculation}</span>
+      <span style={{ textAlign: "right" }}>{qty}</span>
+      <span style={{ textAlign: "right" }}>{rate}</span>
       <span style={{ textAlign: "right" }}>{amount}</span>
     </div>
   );
 }
 
-function Divider({ character }: { character: "-" | "=" }) {
+function Divider({ character }: { character: "-" | "." }) {
   return <div aria-hidden="true">{character.repeat(32)}</div>;
 }
 

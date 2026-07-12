@@ -51,13 +51,15 @@ function padLine(left, right, width) {
   return l + " ".repeat(Math.max(1, space)) + r;
 }
 
-function itemLine(name, calculation, amount, width) {
-  const calculationWidth = 6;
+function itemLine(name, qty, rate, amount, width) {
+  const qtyWidth = 4;
+  const rateWidth = 6;
   const amountWidth = 6;
-  const nameWidth = width - calculationWidth - amountWidth - 2;
+  const nameWidth = width - qtyWidth - rateWidth - amountWidth - 3;
   return [
     trunc(name, nameWidth).padEnd(nameWidth),
-    trunc(calculation, calculationWidth).padStart(calculationWidth),
+    trunc(qty, qtyWidth).padStart(qtyWidth),
+    trunc(rate, rateWidth).padStart(rateWidth),
     trunc(amount, amountWidth).padStart(amountWidth),
   ].join(" ");
 }
@@ -154,6 +156,11 @@ function buildEscPosReceipt(receipt, opts = {}) {
     for (const line of wrapWords(settings.address, width)) pushLine(chunks, line);
   }
   if (settings.phone) pushLine(chunks, `Ph: ${toAscii(settings.phone)}`);
+  if (data.method) {
+    pushRaw(chunks, [0x1b, 0x45, 0x01]);
+    pushLine(chunks, toAscii(data.method).toUpperCase());
+    pushRaw(chunks, [0x1b, 0x45, 0x00]);
+  }
 
   // Left align body
   pushRaw(chunks, [0x1b, 0x61, 0x00]);
@@ -169,8 +176,8 @@ function buildEscPosReceipt(receipt, opts = {}) {
   }
 
   pushLine(chunks, rule);
-  pushLine(chunks, itemLine("Item", "QxRate", "Amount", width));
-  pushLine(chunks, eq);
+  pushLine(chunks, itemLine("ITEM NAME", "QTY", "RATE", "AMOUNT", width));
+  pushLine(chunks, ".".repeat(width));
 
   const lines = Array.isArray(data.lines) ? data.lines : [];
   let subtotal = 0;
@@ -184,11 +191,13 @@ function buildEscPosReceipt(receipt, opts = {}) {
       chunks,
       itemLine(
         line.name || "Item",
-        `${compactNumber(qty)}x${compactNumber(price)}`,
+        compactNumber(qty),
+        compactNumber(price),
         compactNumber(amount),
         width,
       ),
     );
+    pushLine(chunks, ".".repeat(width));
   }
 
   const discount = Number(data.discount) || 0;
@@ -200,10 +209,9 @@ function buildEscPosReceipt(receipt, opts = {}) {
     pushLine(chunks, padLine("Discount", `-${money(discount)}`, width));
   }
   pushRaw(chunks, [0x1b, 0x45, 0x01]);
-  pushLine(chunks, padLine("TOTAL", money(total), width));
+  pushLine(chunks, padLine("NET BILL", money(total), width));
   pushRaw(chunks, [0x1b, 0x45, 0x00]);
 
-  if (data.method) pushLine(chunks, padLine("Payment", toAscii(data.method), width));
   if (typeof data.paid === "number" && data.paid > 0) {
     pushLine(chunks, padLine("Paid", money(data.paid), width));
   }
